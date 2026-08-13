@@ -1,0 +1,44 @@
+<Window x:Class="FileGroupy.Views.MtpFolderPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewModels="clr-namespace:FileGroupy.ViewModels"
+        Title="选择设备文件夹" Width="620" Height="560" WindowStartupLocation="CenterOwner" Background="#F6F8FC"
+        Loaded="Window_OnLoaded">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    <HierarchicalDataTemplate DataType="{x:Type viewModels:MtpFolderNode}" ItemsSource="{Binding Children}">
+      <StackPanel Margin="2,4">
+        <StackPanel.Style>
+          <Style TargetType="StackPanel">
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsPlaceholder}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </StackPanel.Style>
+        <TextBlock Text="{Binding Name}" Foreground="#182230" />
+        <TextBlock Text="{Binding LoadError}" Foreground="#D92D20" FontSize="11" />
+      </StackPanel>
+    </HierarchicalDataTemplate>
+    <Style TargetType="TreeViewItem">
+      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+    </Style>
+  </Window.Resources>
+  <Grid Margin="26">
+    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+    <StackPanel>
+      <TextBlock Text="选择设备中的文件夹" FontSize="22" FontWeight="SemiBold" Foreground="#182230" />
+      <TextBlock Text="MTP 会显示共享存储目录；PTP 通常只显示相机媒体目录展开节点可继续读取子文件夹" Margin="0,7,0,18" Foreground="#667085" TextWrapping="Wrap" />
+    </StackPanel>
+    <Grid Grid.Row="1">
+      <TreeView x:Name="FolderTree" ItemsSource="{Binding RootNodes}" SelectedItemChanged="FolderTree_OnSelectedItemChanged" TreeViewItem.Expanded="FolderTree_OnExpanded"
+                BorderBrush="#D0D5DD" Background="White" Padding="8" />
+      <TextBlock Text="正在读取手机文件夹..." Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
+                 Background="#CCFFFFFF" Foreground="#175CD3" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="18,10" />
+    </Grid>
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+      <TextBlock Text="{Binding SelectedPath}" Foreground="#667085" Width="320" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,14,0" />
+      <Button Content="取消" IsCancel="True" Background="#F2F4F7" Foreground="#344054" Margin="0,0,10,0" />
+      <Button Content="从此文件夹扫描" IsDefault="True" Click="ScanButton_OnClick" Background="#1677FF" Foreground="White" />
+    </StackPanel>
+  </Grid>
+</Window>
