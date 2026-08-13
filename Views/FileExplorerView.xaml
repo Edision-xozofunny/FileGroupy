@@ -1,7 +1,8 @@
 <UserControl x:Class="FileGroupy.Views.FileExplorerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:controls="clr-namespace:FileGroupy.Controls">
+             xmlns:controls="clr-namespace:FileGroupy.Controls"
+             xmlns:hc="https://handyorg.github.io/handycontrol">
     <Grid Margin="48,42,48,48">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -31,39 +32,12 @@
         <Grid Grid.Row="2">
             <controls:StickyDataGrid x:Name="FilesGrid" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                 HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderBrush="#E2E8F0" BorderThickness="1" Background="{StaticResource SurfaceBrush}" RowHeaderWidth="0" FrozenColumnCount="2"
+                hc:DataGridAttach.ShowRowNumber="True" hc:DataGridAttach.ShowSelectAllButton="True"
                 SelectionMode="Extended" EnableRowVirtualization="True" EnableColumnVirtualization="True"
                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
                 ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
                 PreviewMouseLeftButtonDown="FilesGrid_OnPreviewMouseLeftButtonDown" PreviewMouseMove="FilesGrid_OnPreviewMouseMove" PreviewMouseLeftButtonUp="FilesGrid_OnPreviewMouseLeftButtonUp"
                 MouseDoubleClick="FilesGrid_OnMouseDoubleClick" ContextMenuOpening="FilesGrid_OnContextMenuOpening">
-                <DataGrid.ColumnHeaderStyle>
-                    <Style TargetType="DataGridColumnHeader">
-                        <Setter Property="Background" Value="#F8FAFC" />
-                        <Setter Property="Foreground" Value="#475467" />
-                        <Setter Property="FontWeight" Value="SemiBold" />
-                        <Setter Property="Padding" Value="10,11" />
-                        <Setter Property="BorderBrush" Value="#E2E8F0" />
-                    </Style>
-                </DataGrid.ColumnHeaderStyle>
-                <DataGrid.RowStyle>
-                    <Style TargetType="DataGridRow">
-                        <Setter Property="MinHeight" Value="38" />
-                        <Setter Property="BorderBrush" Value="#F2F4F7" />
-                        <Setter Property="Background" Value="White" />
-                        <Style.Triggers>
-                            <Trigger Property="AlternationIndex" Value="1">
-                                <Setter Property="Background" Value="#F8FAFC" />
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#F1F5F9" />
-                            </Trigger>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="Background" Value="#DCEBFF" />
-                                <Setter Property="Foreground" Value="#1D4ED8" />
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </DataGrid.RowStyle>
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem x:Name="OpenMenuItem" Header="打开" Visibility="Collapsed" Click="OpenMenuItem_OnClick" />
