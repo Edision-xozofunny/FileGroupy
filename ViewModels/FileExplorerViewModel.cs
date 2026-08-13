@@ -254,6 +254,28 @@ public partial class FileExplorerViewModel(
         }
     }
 
+    /// <summary>在 Windows 文件资源管理器中选中本地源文件。</summary>
+    [RelayCommand(CanExecute = nameof(CanOpenLocalFile))]
+    private async Task OpenFileLocationAsync(ExplorerRow? row)
+    {
+        if (row?.File is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await previewService.OpenFileLocationAsync(row.File);
+        }
+        catch (Exception exception)
+        {
+            ShowOpenError(row.File, exception);
+        }
+    }
+
+    private static bool CanOpenLocalFile(ExplorerRow? row) =>
+        row?.File?.SourceKind == StorageSourceKind.LocalFileSystem;
+
     private async Task ShowTransferDialogAsync(bool moveFiles)
     {
         var selectedFiles = _files.Where(file => _selectedPaths.Contains(file.FullPath)).ToList();
@@ -634,6 +656,7 @@ public partial class FileExplorerViewModel(
         FileCategory.Video => "视频",
         FileCategory.Office => "Office 与 PDF 文档",
         FileCategory.Archives => "压缩文件",
+        FileCategory.SourceCode => "源代码",
         _ => "其他文件"
     };
 

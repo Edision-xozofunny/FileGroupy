@@ -13,6 +13,8 @@ public enum FileCategory
     Office,
     /// <summary>压缩归档文件</summary>
     Archives,
+    /// <summary>源代码、脚本与开发配置文件</summary>
+    SourceCode,
     /// <summary>未匹配内置规则的其他文件</summary>
     Other
 }

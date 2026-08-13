@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using FileGroupy.Controls;
 using FileGroupy.Models;
 
 namespace FileGroupy.ViewModels;
@@ -21,7 +22,7 @@ public sealed class CategorySummary
 }
 
 /// <summary>文件浏览表格中的一行，可以是分类根行或实际文件行</summary>
-public partial class ExplorerRow : ObservableObject
+public partial class ExplorerRow : ObservableObject, IStickyDataGridRow
 {
     /// <summary>指示当前行是否为分类根节点</summary>
     public bool IsCategory { get; init; }
@@ -35,6 +36,8 @@ public partial class ExplorerRow : ObservableObject
     public string Name { get; init; } = string.Empty;
     /// <summary>文件扩展名；分类根行为空</summary>
     public string Extension { get; init; } = string.Empty;
+    /// <summary>供表格显示的类型说明；保留 <see cref="Extension"/> 的原始扩展名语义。</summary>
+    public string TypeDisplayName => FileCategoryCatalog.GetDisplayName(Extension);
     /// <summary>文件完整路径；分类根行为空</summary>
     public string Location { get; init; } = string.Empty;
     /// <summary>格式化后的最后修改时间；分类根行为空</summary>
@@ -49,6 +52,8 @@ public partial class ExplorerRow : ObservableObject
     public FileItem? File { get; init; }
     /// <summary>指示当前行是否为可展开或可全选的分组节点</summary>
     public bool IsGroup => IsCategory || IsExtensionGroup;
+    /// <summary>分类根行在滚动时作为当前分组标题固定在表头下方。</summary>
+    public bool IsStickyRow => IsCategory;
     /// <summary>指示当前行是否允许通过复选框参与批量操作</summary>
     public bool IsSelectable => true;
 

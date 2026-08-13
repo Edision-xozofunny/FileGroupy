@@ -122,6 +122,11 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         FileTransferOptions options,
         CancellationToken cancellationToken)
     {
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException("源文件已不存在", sourcePath);
+        }
+
         if (string.Equals(Path.GetFullPath(sourcePath), Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
         {
             return TransferOutcome.Skipped;
@@ -146,6 +151,7 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         if (options.MoveFiles && string.Equals(Path.GetPathRoot(sourcePath), Path.GetPathRoot(destinationPath), StringComparison.OrdinalIgnoreCase))
         {
             File.Move(sourcePath, destinationPath);
+            EnsureLocalSourceWasMoved(sourcePath);
             return TransferOutcome.Succeeded;
         }
 
@@ -153,6 +159,7 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         if (options.MoveFiles)
         {
             File.Delete(sourcePath);
+            EnsureLocalSourceWasMoved(sourcePath);
         }
 
         return TransferOutcome.Succeeded;
@@ -178,6 +185,7 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
                 if (options.MoveFiles && string.Equals(Path.GetPathRoot(sourcePath), Path.GetPathRoot(candidate), StringComparison.OrdinalIgnoreCase))
                 {
                     File.Move(sourcePath, candidate);
+                    EnsureLocalSourceWasMoved(sourcePath);
                 }
                 else
                 {
@@ -185,6 +193,7 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
                     if (options.MoveFiles)
                     {
                         File.Delete(sourcePath);
+                        EnsureLocalSourceWasMoved(sourcePath);
                     }
                 }
 
@@ -225,6 +234,15 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         await using var destination = new FileStream(destinationPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, BufferSize,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
         await source.CopyToAsync(destination, BufferSize, cancellationToken);
+    }
+
+    /// <summary>移动任务仅在源文件已实际删除后才可被报告为成功。</summary>
+    private static void EnsureLocalSourceWasMoved(string sourcePath)
+    {
+        if (File.Exists(sourcePath))
+        {
+            throw new IOException("目标复制完成，但无法删除源文件");
+        }
     }
 
     private static string GetDestinationPath(FileItem file, string destinationRoot, string sourceRoot, bool preserveStructure)

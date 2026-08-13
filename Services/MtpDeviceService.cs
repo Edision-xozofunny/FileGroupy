@@ -10,16 +10,6 @@ namespace FileGroupy.Services;
 /// </summary>
 public sealed class MtpDeviceService : IMtpDeviceService
 {
-    /// <summary>内置扩展名索引，避免扫描每个手机文件时遍历分类规则</summary>
-    private static readonly IReadOnlyDictionary<string, FileCategory> ExtensionCategories = new Dictionary<string, FileCategory>(StringComparer.OrdinalIgnoreCase)
-    {
-        [".jpg"] = FileCategory.Images, [".jpeg"] = FileCategory.Images, [".png"] = FileCategory.Images, [".gif"] = FileCategory.Images, [".bmp"] = FileCategory.Images, [".webp"] = FileCategory.Images, [".svg"] = FileCategory.Images, [".tif"] = FileCategory.Images, [".tiff"] = FileCategory.Images, [".heic"] = FileCategory.Images,
-        [".mp3"] = FileCategory.Audio, [".wav"] = FileCategory.Audio, [".flac"] = FileCategory.Audio, [".aac"] = FileCategory.Audio, [".m4a"] = FileCategory.Audio, [".ogg"] = FileCategory.Audio, [".wma"] = FileCategory.Audio,
-        [".mp4"] = FileCategory.Video, [".mkv"] = FileCategory.Video, [".avi"] = FileCategory.Video, [".mov"] = FileCategory.Video, [".wmv"] = FileCategory.Video, [".webm"] = FileCategory.Video, [".m4v"] = FileCategory.Video,
-        [".doc"] = FileCategory.Office, [".docx"] = FileCategory.Office, [".xls"] = FileCategory.Office, [".xlsx"] = FileCategory.Office, [".ppt"] = FileCategory.Office, [".pptx"] = FileCategory.Office, [".csv"] = FileCategory.Office, [".odt"] = FileCategory.Office, [".ods"] = FileCategory.Office, [".pdf"] = FileCategory.Office,
-        [".zip"] = FileCategory.Archives, [".rar"] = FileCategory.Archives, [".7z"] = FileCategory.Archives, [".tar"] = FileCategory.Archives, [".gz"] = FileCategory.Archives
-    };
-
     /// <inheritdoc />
     public Task<IReadOnlyList<MtpDeviceInfo>> GetAvailablePortableDevicesAsync(CancellationToken cancellationToken = default) =>
         Task.Run(() =>
@@ -282,6 +272,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
                     if (options.MoveFiles)
                     {
                         device.DeleteFile(file.FullPath);
+                        EnsureMtpSourceWasMoved(device, file.FullPath);
                     }
 
                     succeeded++;
@@ -393,6 +384,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
                     if (options.MoveFiles)
                     {
                         File.Delete(file.FullPath);
+                        EnsureLocalSourceWasMoved(file.FullPath);
                     }
 
                     succeeded++;
@@ -431,8 +423,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         progress?.Report(new FileScanProgress(folders, files, bytes, new Dictionary<FileCategory, CategoryScanSummary>(categories)));
 
     /// <summary>根据扩展名确定内置分类</summary>
-    private static FileCategory GetCategory(string extension) =>
-        ExtensionCategories.TryGetValue(extension, out var category) ? category : FileCategory.Other;
+    private static FileCategory GetCategory(string extension) => FileCategoryCatalog.GetCategory(extension);
 
     /// <summary>将协议用于扫描结果与界面提示，不影响 WPD 的统一文件 API 调用</summary>
     private static string GetProtocolName(PortableDeviceProtocol protocol) => protocol == PortableDeviceProtocol.Ptp ? "PTP" : "MTP";
@@ -479,6 +470,24 @@ public sealed class MtpDeviceService : IMtpDeviceService
         var parent = Path.GetDirectoryName(directoryPath);
         EnsureMtpDirectory(device, parent);
         device.CreateDirectory(directoryPath);
+    }
+
+    /// <summary>移动设备文件后确认源对象已消失，避免将仍存在的文件从列表中过早移除。</summary>
+    private static void EnsureMtpSourceWasMoved(MediaDevice device, string sourcePath)
+    {
+        if (device.FileExists(sourcePath))
+        {
+            throw new IOException("目标复制完成，但无法删除设备中的源文件");
+        }
+    }
+
+    /// <summary>移动本地文件后确认源文件已删除，避免将失效状态报告为成功。</summary>
+    private static void EnsureLocalSourceWasMoved(string sourcePath)
+    {
+        if (File.Exists(sourcePath))
+        {
+            throw new IOException("目标上传完成，但无法删除本地源文件");
+        }
     }
 
     /// <summary>在 MTP 存储中查找可用的原名或“名称 (n).扩展名”目标路径</summary>

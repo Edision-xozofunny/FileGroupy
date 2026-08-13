@@ -11,6 +11,8 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
 {
     /// <summary>开始拖拽框选时相对于表格的鼠标坐标；为空表示未框选</summary>
     private System.Windows.Point? _selectionOrigin;
+    /// <summary>当前右键菜单关联的文件行，供菜单点击后稳定传递命令参数。</summary>
+    private ExplorerRow? _contextMenuRow;
 
     /// <summary>初始化文件浏览页面及其 XAML 组件</summary>
     public FileExplorerView() => InitializeComponent();
@@ -129,20 +131,47 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         var row = FindAncestor<DataGridRow>(e.OriginalSource as DependencyObject)?.Item as ExplorerRow;
         if (row?.File is not null && DataContext is FileExplorerViewModel viewModel)
         {
+            _contextMenuRow = row;
             FilesGrid.SelectedItem = row;
-            OpenMenuItem.CommandParameter = row;
-            OpenWithMenuItem.CommandParameter = row;
             OpenMenuItem.IsEnabled = viewModel.OpenFileCommand.CanExecute(row);
             OpenWithMenuItem.IsEnabled = viewModel.OpenWithFileCommand.CanExecute(row);
+            OpenLocationMenuItem.IsEnabled = viewModel.OpenFileLocationCommand.CanExecute(row);
             OpenMenuItem.Visibility = Visibility.Visible;
             OpenWithMenuItem.Visibility = Visibility.Visible;
+            OpenLocationMenuItem.Visibility = Visibility.Visible;
             OpenMenuSeparator.Visibility = Visibility.Visible;
             return;
         }
 
+        _contextMenuRow = null;
         OpenMenuItem.Visibility = Visibility.Collapsed;
         OpenWithMenuItem.Visibility = Visibility.Collapsed;
+        OpenLocationMenuItem.Visibility = Visibility.Collapsed;
         OpenMenuSeparator.Visibility = Visibility.Collapsed;
+    }
+
+    private async void OpenMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is FileExplorerViewModel viewModel && _contextMenuRow is not null)
+        {
+            await viewModel.OpenFileCommand.ExecuteAsync(_contextMenuRow);
+        }
+    }
+
+    private async void OpenWithMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is FileExplorerViewModel viewModel && _contextMenuRow is not null)
+        {
+            await viewModel.OpenWithFileCommand.ExecuteAsync(_contextMenuRow);
+        }
+    }
+
+    private async void OpenLocationMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is FileExplorerViewModel viewModel && _contextMenuRow is not null)
+        {
+            await viewModel.OpenFileLocationCommand.ExecuteAsync(_contextMenuRow);
+        }
     }
 
     /// <summary>向上查找指定类型的可视树父元素</summary>

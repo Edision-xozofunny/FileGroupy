@@ -1,0 +1,43 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style TargetType="DataGrid">
+    <Setter Property="Background" Value="White" />
+    <Setter Property="BorderBrush" Value="#D0D5DD" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="GridLinesVisibility" Value="Horizontal" />
+    <Setter Property="HorizontalGridLinesBrush" Value="#EEF2F6" />
+    <Setter Property="VerticalGridLinesBrush" Value="Transparent" />
+    <Setter Property="RowBackground" Value="White" />
+    <Setter Property="AlternatingRowBackground" Value="#F8FAFC" />
+    <Setter Property="AlternationCount" Value="2" />
+    <Setter Property="RowHeight" Value="40" />
+    <Setter Property="ColumnHeaderHeight" Value="40" />
+    <Setter Property="SelectionUnit" Value="FullRow" />
+    <Setter Property="SelectionMode" Value="Extended" />
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+  </Style>
+  <Style TargetType="DataGridColumnHeader">
+    <Setter Property="Background" Value="#F1F5F9" />
+    <Setter Property="Foreground" Value="#475467" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Padding" Value="10,11" />
+    <Setter Property="BorderBrush" Value="#DCE3EC" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+  <Style TargetType="DataGridCell">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="Foreground" Value="#344054" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Style.Triggers>
+      <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#DCEBFF" /><Setter Property="Foreground" Value="#1D4ED8" /></Trigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="DataGridRow">
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#EEF4FF" /></Trigger>
+      <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#DCEBFF" /></Trigger>
+    </Style.Triggers>
+  </Style>
+</ResourceDictionary>

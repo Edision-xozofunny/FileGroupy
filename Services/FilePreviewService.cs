@@ -64,16 +64,46 @@ public sealed class FilePreviewService(IMtpDeviceService mtpDeviceService) : IFi
     public async Task OpenWithApplicationAsync(FileItem file, CancellationToken cancellationToken = default)
     {
         var path = await GetReadablePathAsync(file, cancellationToken);
-        OpenWithApplication(path);
+        await Task.Run(() => OpenWithApplication(path), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task OpenFileLocationAsync(FileItem file, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (file.SourceKind != StorageSourceKind.LocalFileSystem)
+        {
+            throw new NotSupportedException("便携设备文件无法在 Windows 文件资源管理器中定位");
+        }
+
+        if (!File.Exists(file.FullPath))
+        {
+            throw new FileNotFoundException("源文件已不存在", file.FullPath);
+        }
+
+        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{file.FullPath}\"") { UseShellExecute = true });
+        return Task.CompletedTask;
     }
 
     /// <summary>调用 Windows Shell 的默认文件关联</summary>
     private static void OpenWithDefaultApplication(string path) =>
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
 
-    /// <summary>调用 Shell32 的 OpenAs_RunDLL，显示 Windows 原生“打开方式”选择器</summary>
-    private static void OpenWithApplication(string path) =>
-        Process.Start(new ProcessStartInfo("rundll32.exe", $"shell32.dll,OpenAs_RunDLL \"{path}\"") { UseShellExecute = true });
+    /// <summary>启动 Windows 的 OpenWith 宿主，显示资源管理器式的应用选择窗口。</summary>
+    private static void OpenWithApplication(string path)
+    {
+        var openWithPath = Path.Combine(Environment.SystemDirectory, "OpenWith.exe");
+        if (!File.Exists(openWithPath))
+        {
+            throw new FileNotFoundException("找不到 Windows“打开方式”组件", openWithPath);
+        }
+
+        Process.Start(new ProcessStartInfo(openWithPath, $"\"{path}\"")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true
+        });
+    }
 
     /// <summary>获取可由本机 API 打开的路径；MTP 文件会下载至应用临时目录</summary>
     private async Task<string> GetReadablePathAsync(FileItem file, CancellationToken cancellationToken)

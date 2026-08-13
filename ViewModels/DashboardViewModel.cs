@@ -251,6 +251,7 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         FileCategory.Video => "视频",
         FileCategory.Office => "Office 与 PDF 文档",
         FileCategory.Archives => "压缩文件",
+        FileCategory.SourceCode => "源代码",
         _ => "其他文件"
     };
 
@@ -261,6 +262,7 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         FileCategory.Video => "影",
         FileCategory.Office => "文档",
         FileCategory.Archives => "包",
+        FileCategory.SourceCode => "代码",
         _ => "他"
     };
 

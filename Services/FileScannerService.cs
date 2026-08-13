@@ -6,7 +6,6 @@ namespace FileGroupy.Services;
 /// <summary>基于扩展名递归扫描本地目录的默认实现</summary>
 public sealed class FileScannerService : IFileScannerService
 {
-    /// <summary>文件分类与允许扩展名的映射表，便于后续添加新分类规则</summary>
     /// <summary>在线程池中执行 I/O 密集型目录扫描，避免阻塞 WPF 界面线程</summary>
     /// <param name="folderPath">待扫描的根目录</param>
     /// <param name="cancellationToken">扫描取消标记</param>
@@ -15,23 +14,6 @@ public sealed class FileScannerService : IFileScannerService
     /// <param name="folderPath">待遍历的根目录</param>
     /// <param name="cancellationToken">循环中定期检查的取消标记</param>
     /// <returns>扫描期间成功读取到的文件及文件夹数量</returns>
-    /// <summary>根据文件扩展名返回第一个匹配的内置分类</summary>
-    /// <param name="extension">包含点号的扩展名</param>
-    /// <returns>匹配分类；未匹配时返回 <see cref="FileCategory.Other"/></returns>
-    private static readonly Dictionary<FileCategory, HashSet<string>> Extensions = new()
-    {
-        [FileCategory.Images] = new([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".tif", ".tiff", ".heic"]),
-        [FileCategory.Audio] = new([".mp3", ".wav", ".flac", ".aac", ".m4a", ".ogg", ".wma"]),
-        [FileCategory.Video] = new([".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v"]),
-        [FileCategory.Office] = new([".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".csv", ".odt", ".ods", ".pdf"]),
-        [FileCategory.Archives] = new([".zip", ".rar", ".7z", ".tar", ".gz"])
-    };
-
-    /// <summary>扩展名到分类的大小写无关索引，避免每个文件遍历所有分类规则</summary>
-    private static readonly IReadOnlyDictionary<string, FileCategory> ExtensionCategories = Extensions
-        .SelectMany(pair => pair.Value.Select(extension => new KeyValuePair<string, FileCategory>(extension, pair.Key)))
-        .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
-
     /// <summary>目录枚举选项：忽略无权限位置并跳过联接点，避免大盘符扫描进入循环路径</summary>
     private static readonly EnumerationOptions EnumerationOptions = new()
     {
@@ -84,7 +66,7 @@ public sealed class FileScannerService : IFileScannerService
                             continue;
                         }
 
-                        var category = GetCategory(info.Extension);
+                        var category = FileCategoryCatalog.GetCategory(info.Extension);
                         files.Add(new FileItem(info.Name, info.FullName, info.Extension, info.Length, info.LastWriteTime, category));
                         totalBytes += info.Length;
                         var current = categoryTotals[category];
@@ -114,10 +96,4 @@ public sealed class FileScannerService : IFileScannerService
         progress?.Report(new FileScanProgress(folders, files, bytes, new Dictionary<FileCategory, CategoryScanSummary>(categories)));
     }
 
-    private static FileCategory GetCategory(string extension)
-    {
-        return ExtensionCategories.TryGetValue(extension, out var category)
-            ? category
-            : FileCategory.Other;
-    }
 }

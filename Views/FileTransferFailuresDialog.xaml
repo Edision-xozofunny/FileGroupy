@@ -8,7 +8,7 @@
       <TextBlock Text="传输失败详情" FontSize="22" FontWeight="SemiBold" Foreground="#182230" />
       <TextBlock Text="仅保留本次复制或移动任务中的失败记录" Margin="0,6,0,18" Foreground="#667085" />
     </StackPanel>
-    <DataGrid Grid.Row="1" ItemsSource="{Binding Failures}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" RowHeaderWidth="0" BorderBrush="#D0D5DD" Background="White"
+    <DataGrid Grid.Row="1" ItemsSource="{Binding Failures}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" RowHeaderWidth="0" BorderBrush="#D0D5DD" Background="White" FrozenColumnCount="2"
               ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True">
       <DataGrid.Columns>
         <DataGridTextColumn Header="文件" Binding="{Binding FileName}" Width="160" />

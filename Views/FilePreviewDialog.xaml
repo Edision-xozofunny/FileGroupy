@@ -9,7 +9,9 @@
     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
     <StackPanel>
       <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" Foreground="#182230" TextTrimming="CharacterEllipsis" />
-      <TextBlock Text="{Binding File.FullPath}" Margin="0,5,0,0" Foreground="#667085" TextTrimming="CharacterEllipsis" />
+      <TextBox Text="{Binding File.FullPath}" Margin="0,5,0,0" Foreground="#667085" Background="Transparent" BorderThickness="0"
+               IsReadOnly="True" IsTabStop="False" TextWrapping="Wrap" AcceptsReturn="True" MaxHeight="72"
+               VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" ToolTip="可选择并复制完整文件位置" />
       <TextBlock Text="{Binding Notice}" Margin="0,7,0,0" Foreground="#B54708" />
     </StackPanel>
     <Border Grid.Row="1" Background="White" BorderBrush="#D0D5DD" BorderThickness="1" CornerRadius="6" Margin="0,18,0,18">
