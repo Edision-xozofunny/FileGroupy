@@ -25,6 +25,12 @@ public sealed class FilePreviewService(IMtpDeviceService mtpDeviceService) : IFi
     {
         if (file.Category == FileCategory.Images)
         {
+            // SVG 属于矢量图, 交给系统默认程序或浏览器打开, 不进入 WPF 位图解码流程.
+            if (string.Equals(file.Extension, ".svg", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
             var previewPath = await GetReadablePathAsync(file, cancellationToken);
             if (string.Equals(Path.GetExtension(previewPath), ".gif", StringComparison.OrdinalIgnoreCase))
             {

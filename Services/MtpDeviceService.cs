@@ -7,15 +7,21 @@ using FileGroupy.Models;
 
 namespace FileGroupy.Services;
 
+/// <summary>通过 Windows WPD 协议访问 MTP 和 PTP 设备</summary>
 public sealed class MtpDeviceService : IMtpDeviceService
 {
+    /// <summary>保护进程内设备扫描缓存的锁</summary>
     private static readonly object ScanCacheLock = new();
+    /// <summary>按设备和路径保存的扫描结果缓存</summary>
     private static readonly Dictionary<string, CachedScan> ScanCache = new(StringComparer.Ordinal);
+    /// <summary>扫描缓存的有效期</summary>
     private static readonly TimeSpan ScanCacheLifetime = TimeSpan.FromHours(1);
+    /// <summary>设备扫描时跳过的低价值目录</summary>
     private static readonly HashSet<string> ExcludedDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
     {
         ".thumbnails", "cache", "code_cache", "databases", "node_modules"
     };
+    /// <summary>单个设备目录允许读取的最大条目数</summary>
     private const int MaximumEntriesPerDirectory = 20_000;
 
     /// <inheritdoc />
@@ -549,6 +555,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
 
     private static PortableDeviceProtocol? ResolvePortableProtocol(MediaDevice device)
     {
+        // 先使用驱动报告的明确类型, 再用 Apple 标识补充 iPhone 的 PTP 识别.
         if (device.DeviceType == DeviceType.Phone)
         {
             return PortableDeviceProtocol.Mtp;
@@ -568,11 +575,8 @@ public sealed class MtpDeviceService : IMtpDeviceService
             return PortableDeviceProtocol.Ptp;
         }
 
-        if (device.DeviceType is DeviceType.MediaPlayer or DeviceType.Generic)
-        {
-            return PortableDeviceProtocol.Ptp;
-        }
-
+        // Generic 和 MediaPlayer 设备可能是 USB 存储设备或驱动器桥接对象.
+        // 未明确识别为手机, 相机或 Apple 设备时不将其暴露为 PTP 设备.
         return null;
     }
 

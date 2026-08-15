@@ -14,4 +14,12 @@ public interface IFileScannerService
         string folderPath,
         IProgress<FileScanProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>延迟验证本地图片是否可解码</summary>
+    /// <param name="files">待验证的本地图像文件</param>
+    /// <param name="cancellationToken">取消操作的标记</param>
+    /// <returns>无法解码的图像完整路径集合</returns>
+    Task<IReadOnlySet<string>> FindInvalidImagePathsAsync(
+        IReadOnlyCollection<FileItem> files,
+        CancellationToken cancellationToken = default);
 }

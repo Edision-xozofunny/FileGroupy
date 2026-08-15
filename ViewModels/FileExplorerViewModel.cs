@@ -14,7 +14,8 @@ namespace FileGroupy.ViewModels;
 public partial class FileExplorerViewModel(
     IFileTransferService transferService,
     IMtpDeviceService mtpDeviceService,
-    IFilePreviewService previewService) : ObservableObject
+    IFilePreviewService previewService,
+    IFileScannerService scanner) : ObservableObject
 {
     /// <summary>最近一次扫描的全部文件</summary>
     private readonly List<FileItem> _files = [];
@@ -40,8 +41,10 @@ public partial class FileExplorerViewModel(
     private int _currentSkippedItemCount;
     /// <summary>当前结果是否来自本地目录扫描</summary>
     private bool _isLocalScan;
-    /// <summary>是否仅显示扫描时无法解码的图像文件.</summary>
+    /// <summary>是否仅显示延迟校验后无法解码的图像文件</summary>
     private bool _showInvalidImagesOnly;
+    /// <summary>用于取消无效图像延迟校验任务</summary>
+    private CancellationTokenSource? _invalidImageValidationCancellationTokenSource;
 
     /// <summary>绑定到表格的根行和文件子行集合</summary>
     public BulkObservableCollection<ExplorerRow> Rows { get; } = [];
@@ -64,9 +67,17 @@ public partial class FileExplorerViewModel(
     [ObservableProperty] private string _searchQuery = string.Empty;
     /// <summary>最近一次文件操作的状态文本</summary>
     [ObservableProperty] private string _operationStatus = string.Empty;
+    /// <summary>当前在表格中选中的行, 仅用于同步表格状态和详情侧栏</summary>
+    [ObservableProperty] private ExplorerRow? _selectedRow;
+    /// <summary>文件详情侧栏是否打开, 仅由右键菜单显式触发</summary>
+    [ObservableProperty] private bool _isDetailsDrawerOpen;
 
     /// <summary>是否存在可展示的文件操作状态</summary>
     public bool HasOperationStatus => !string.IsNullOrWhiteSpace(OperationStatus);
+    /// <summary>扫描结果中无法解码的图像数量</summary>
+    public int InvalidImageCount => _files.Count(file => file.IsInvalidImage == true);
+    /// <summary>是否正在仅显示无效图像</summary>
+    public bool IsInvalidImagesFilterActive => _showInvalidImagesOnly;
 
     /// <summary>文件集合发生增删改后触发</summary>
     public event EventHandler<FolderScanResult>? FilesChanged;
@@ -83,11 +94,13 @@ public partial class FileExplorerViewModel(
         SearchQuery = string.Empty;
         _categoryFilter = null;
         _showInvalidImagesOnly = false;
+        OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
         OperationStatus = string.Empty;
         _currentScanPath = result.Path;
         _currentFolderCount = result.FolderCount;
         _currentSkippedItemCount = result.SkippedItemCount;
         _isLocalScan = result.Files.Count == 0 || result.Files.All(file => file.SourceKind == StorageSourceKind.LocalFileSystem);
+        OnPropertyChanged(nameof(InvalidImageCount));
         Title = "全部文件";
         Subtitle = result.SkippedItemCount == 0
             ? $"{result.Path}  |  {result.Files.Count:N0} 个文件"
@@ -109,6 +122,7 @@ public partial class FileExplorerViewModel(
         _expandedCategories.UnionWith(Enum.GetValues<FileCategory>());
         _categoryFilter = null;
         _showInvalidImagesOnly = false;
+        OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
         OperationStatus = string.Empty;
         _currentScanPath = string.Empty;
         _currentFolderCount = 0;
@@ -127,6 +141,7 @@ public partial class FileExplorerViewModel(
     {
         _categoryFilter = category;
         _showInvalidImagesOnly = false;
+        OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
         Title = $"{GetCategoryName(category)}文件";
         Subtitle = "分类卡片筛选结果";
         BuildRows();
@@ -137,6 +152,7 @@ public partial class FileExplorerViewModel(
     {
         _categoryFilter = null;
         _showInvalidImagesOnly = false;
+        OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
         Title = "全部文件";
         Subtitle = _files.Count == 0 ? "选择文件夹后，以文件类型为根节点浏览内容" : $"共 {_files.Count:N0} 个文件";
         BuildRows();
@@ -145,6 +161,23 @@ public partial class FileExplorerViewModel(
     /// <summary>请求刷新当前扫描来源</summary>
     [RelayCommand]
     private void RefreshCurrent() => RefreshRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>关闭当前文件详情侧栏</summary>
+    [RelayCommand]
+    private void CloseDetails() => IsDetailsDrawerOpen = false;
+
+    /// <summary>显示指定文件行的详情侧栏</summary>
+    [RelayCommand]
+    private void ShowDetails(ExplorerRow? row)
+    {
+        if (row?.File is null)
+        {
+            return;
+        }
+
+        SelectedRow = row;
+        IsDetailsDrawerOpen = true;
+    }
 
     /// <summary>清除当前全部选择</summary>
     [RelayCommand]
@@ -156,18 +189,74 @@ public partial class FileExplorerViewModel(
 
     /// <summary>切换仅显示无法解码图像的筛选条件</summary>
     [RelayCommand]
-    private void ToggleInvalidImagesFilter()
+    private async Task ToggleInvalidImagesFilterAsync()
     {
+        // 关闭筛选只需恢复完整文件树, 已完成的校验结果仍保留在文件模型中.
+        if (_showInvalidImagesOnly)
+        {
+            _showInvalidImagesOnly = false;
+            OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
+            Title = "全部文件";
+            Subtitle = $"共 {_files.Count:N0} 个文件";
+            BuildRows();
+            return;
+        }
+
+        if (!_isLocalScan)
+        {
+            OperationStatus = "无效图像校验仅支持本地磁盘和可移动磁盘";
+            return;
+        }
+
+        _invalidImageValidationCancellationTokenSource?.Cancel();
+        _invalidImageValidationCancellationTokenSource?.Dispose();
+        _invalidImageValidationCancellationTokenSource = new CancellationTokenSource();
+        var cancellationToken = _invalidImageValidationCancellationTokenSource.Token;
+        IsTreeOperationInProgress = true;
         _showInvalidImagesOnly = !_showInvalidImagesOnly;
-        Title = _showInvalidImagesOnly ? "无效图像" : "全部文件";
-        Subtitle = _showInvalidImagesOnly ? "扫描时无法解码的图像文件，可全选后删除" : $"共 {_files.Count:N0} 个文件";
-        BuildRows();
+        OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
+        Title = "无效图像";
+        Subtitle = "正在验证本地图像文件...";
+
+        try
+        {
+            // 快照避免后台校验期间受界面筛选或文件操作影响.
+            var imageFiles = _files.Where(file => file.Category == FileCategory.Images && file.SourceKind == StorageSourceKind.LocalFileSystem).ToArray();
+            var invalidPaths = await scanner.FindInvalidImagePathsAsync(imageFiles, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            for (var index = 0; index < _files.Count; index++)
+            {
+                var file = _files[index];
+                if (file.Category == FileCategory.Images && file.SourceKind == StorageSourceKind.LocalFileSystem)
+                {
+                    _files[index] = file with { IsInvalidImage = invalidPaths.Contains(file.FullPath) };
+                }
+            }
+
+            OnPropertyChanged(nameof(InvalidImageCount));
+            Subtitle = $"已验证 {imageFiles.Length:N0} 个本地图像, 发现 {InvalidImageCount:N0} 个无法解码文件";
+            // 校验完成后一次性重建行集合, 避免每个坏图逐条触发 UI 更新.
+            await RebuildRowsAsync(++_treeOperationVersion);
+        }
+        catch (OperationCanceledException)
+        {
+            _showInvalidImagesOnly = false;
+            OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
+            Title = "全部文件";
+            Subtitle = _files.Count == 0 ? "选择文件夹后，以文件类型为根节点浏览内容" : $"共 {_files.Count:N0} 个文件";
+            BuildRows();
+        }
+        finally
+        {
+            IsTreeOperationInProgress = false;
+        }
     }
 
     /// <summary>展开或折叠分类及扩展名节点</summary>
     [RelayCommand]
     private async Task ToggleGroupAsync(ExplorerRow row)
     {
+        // 分类展开只生成直接子项, 不重新构建整棵树, 以降低大目录展开成本.
         if (IsTreeOperationInProgress)
         {
             return;
@@ -397,6 +486,11 @@ public partial class FileExplorerViewModel(
             return null;
         }
 
+        if (string.Equals(row.File.Extension, ".svg", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ImageHoverPreview(null, "矢量图像", SizeFormatter.Format(row.File.Size), "SVG", false);
+        }
+
         try
         {
             var preview = await previewService.CreatePreviewAsync(row.File, cancellationToken);
@@ -526,6 +620,7 @@ public partial class FileExplorerViewModel(
         _files.RemoveAll(file => removedPathSet.Contains(NormalizeSourcePath(file.FullPath)));
         _selectedPaths.RemoveWhere(path => removedPathSet.Contains(NormalizeSourcePath(path)));
         _searchMatchedPaths?.RemoveWhere(path => removedPathSet.Contains(NormalizeSourcePath(path)));
+        OnPropertyChanged(nameof(InvalidImageCount));
     }
 
     /// <summary>补充移动或复制到当前本地扫描范围内的新文件</summary>
@@ -559,6 +654,8 @@ public partial class FileExplorerViewModel(
             var category = FileCategoryCatalog.GetCategory(info.Extension);
             _files.Add(new FileItem(info.Name, info.FullName, info.Extension, info.Length, info.LastWriteTime, category));
         }
+
+        OnPropertyChanged(nameof(InvalidImageCount));
     }
 
     /// <summary>通知概览页使用当前文件集合重新计算统计信息</summary>
@@ -789,7 +886,7 @@ public partial class FileExplorerViewModel(
 
     /// <summary>获取同时满足筛选和搜索条件的文件</summary>
     private List<FileItem> GetVisibleFiles() => _files.Where(file =>
-        (!_showInvalidImagesOnly || file.IsInvalidImage) &&
+        (!_showInvalidImagesOnly || file.IsInvalidImage == true) &&
         (_searchMatchedPaths is null || _searchMatchedPaths.Contains(file.FullPath))).ToList();
 
     /// <summary>仅构建当前节点的直接可见子项</summary>

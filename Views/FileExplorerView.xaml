@@ -5,8 +5,40 @@
              xmlns:hc="https://handyorg.github.io/handycontrol">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <Style x:Key="FilterToggleSwitch" TargetType="ToggleButton">
+            <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="ToggleBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="Track" Width="28" Height="16" Background="#98A2B3" CornerRadius="8" Margin="0,0,7,0">
+                                    <Ellipse x:Name="Thumb" Width="12" Height="12" Fill="White" Margin="2" HorizontalAlignment="Left" />
+                                </Border>
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ToggleBorder" Property="Background" Value="{StaticResource AccentSoftBrush}" />
+                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="Track" Property="Background" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
-    <Grid Margin="48,42,48,48">
+    <Grid Margin="48,42,48,48" Loaded="ExplorerRoot_OnLoaded" Unloaded="ExplorerRoot_OnUnloaded">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -36,7 +68,10 @@
             <Button Grid.Column="5" Command="{Binding ExpandToLevelCommand}" Content="展开" Style="{StaticResource SecondaryButton}" Padding="16,7" />
             <Button Grid.Column="6" Command="{Binding CollapseAllCommand}" Content="收缩" Style="{StaticResource NeutralButton}" Padding="16,7" Margin="8,0,0,0" />
             <Button Grid.Column="7" Command="{Binding RefreshCurrentCommand}" Content="刷新" Style="{StaticResource SecondaryButton}" Padding="16,7" Margin="8,0,0,0" />
-            <Button Grid.Column="8" Command="{Binding ToggleInvalidImagesFilterCommand}" Content="无效图像" Style="{StaticResource NeutralButton}" Padding="16,7" Margin="8,0,0,0" />
+            <!-- Badge 显示待处理的无效图像数量, 校验在用户开启筛选时延迟执行. -->
+            <hc:Badge Grid.Column="8" Value="{Binding InvalidImageCount}" Maximum="999999" Margin="8,0,0,0" VerticalAlignment="Center">
+                <ToggleButton Command="{Binding ToggleInvalidImagesFilterCommand}" IsChecked="{Binding IsInvalidImagesFilterActive, Mode=OneWay}" Content="无效图像" Style="{StaticResource FilterToggleSwitch}" />
+            </hc:Badge>
         </Grid>
         <Grid Grid.Row="2">
             <Grid.RowDefinitions>
@@ -85,7 +120,7 @@
                 </ItemsControl>
             </Border>
             <Grid Grid.Row="1">
-                <controls:StickyDataGrid x:Name="FilesGrid" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                <controls:StickyDataGrid x:Name="FilesGrid" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow, Mode=TwoWay}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                     HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderBrush="#E2E8F0" BorderThickness="1" Background="{StaticResource SurfaceBrush}" RowHeaderWidth="0" FrozenColumnCount="2"
                     hc:DataGridAttach.ShowRowNumber="True" hc:DataGridAttach.ShowSelectAllButton="True"
                     SelectionMode="Extended" EnableRowVirtualization="True" EnableColumnVirtualization="True"
@@ -96,6 +131,8 @@
                     MouseDoubleClick="FilesGrid_OnMouseDoubleClick" ContextMenuOpening="FilesGrid_OnContextMenuOpening">
                     <DataGrid.ContextMenu>
                         <ContextMenu>
+                            <MenuItem x:Name="DetailsMenuItem" Header="文件详情" Visibility="Collapsed" Click="DetailsMenuItem_OnClick" />
+                            <Separator x:Name="DetailsMenuSeparator" Visibility="Collapsed" />
                             <MenuItem x:Name="OpenMenuItem" Header="打开" Visibility="Collapsed" Click="OpenMenuItem_OnClick" />
                             <MenuItem x:Name="OpenWithMenuItem" Header="打开方式" Visibility="Collapsed" Click="OpenWithMenuItem_OnClick" />
                             <MenuItem x:Name="OpenLocationMenuItem" Header="打开文件位置" Visibility="Collapsed" Click="OpenLocationMenuItem_OnClick" />
@@ -152,6 +189,42 @@
                         </Grid>
                     </Border>
                 </Popup>
+                <!-- 树行在后台重建期间显示局部遮罩, 防止用户重复触发操作. -->
+                <Border Background="#B3FFFFFF" Visibility="{Binding IsTreeOperationInProgress, Converter={StaticResource BooleanToVisibilityConverter}}" Panel.ZIndex="20">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="220">
+                        <ProgressBar Height="6" IsIndeterminate="True" Foreground="{StaticResource AccentBrush}" Background="{StaticResource AccentSoftBrush}" />
+                        <TextBlock Text="正在更新文件列表..." Margin="0,12,0,0" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
+                    </StackPanel>
+                </Border>
+                <!-- 文件详情只从右键菜单打开, 点击表格其他位置时由代码隐藏层关闭. -->
+                <hc:Drawer x:Name="DetailsDrawer" IsOpen="{Binding IsDetailsDrawerOpen, Mode=TwoWay}" Dock="Right" ShowMask="False" Width="280" MinWidth="280" MaxWidth="280" Panel.ZIndex="30">
+                    <hc:Card Header="文件详情" Width="280" Margin="0" Padding="18" Background="{StaticResource SurfaceBrush}">
+                        <Grid Width="244" HorizontalAlignment="Left">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBox Text="{Binding SelectedRow.Name, Mode=OneWay}" Width="244" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
+                            <TextBox Grid.Row="1" Text="{Binding SelectedRow.TypeDisplayName, Mode=OneWay}" Width="244" Margin="0,8,0,18" Foreground="{StaticResource AccentBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
+                            <TextBlock Grid.Row="2" Text="大小" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" />
+                            <TextBox Grid.Row="3" Text="{Binding SelectedRow.Size, Mode=OneWay}" Width="244" Margin="0,3,0,14" Foreground="{StaticResource TextPrimaryBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
+                            <TextBlock Grid.Row="4" Text="修改时间" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" />
+                            <StackPanel Grid.Row="5" Margin="0,3,0,14">
+                                <TextBox Text="{Binding SelectedRow.Modified, Mode=OneWay}" Width="244" Foreground="{StaticResource TextPrimaryBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
+                                <TextBlock Text="位置" Margin="0,14,0,3" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" />
+                                <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <TextBox Text="{Binding SelectedRow.Location, Mode=OneWay}" Width="244" Foreground="{StaticResource TextPrimaryBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
+                                </ScrollViewer>
+                            </StackPanel>
+                            <Button Grid.Row="6" Command="{Binding CloseDetailsCommand}" Content="关闭详情" Style="{StaticResource NeutralButton}" HorizontalAlignment="Right" />
+                        </Grid>
+                    </hc:Card>
+                </hc:Drawer>
             </Grid>
         </Grid>
     </Grid>
