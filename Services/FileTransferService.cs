@@ -75,6 +75,7 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         var skipped = 0;
         var failures = new ConcurrentBag<FileTransferFailure>();
         var successfulSourcePaths = new ConcurrentBag<string>();
+        var successfulTransfers = new ConcurrentBag<FileTransferSuccess>();
 
         await Parallel.ForEachAsync(sourceFiles, new ParallelOptions
         {
@@ -90,6 +91,7 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
                 {
                     Interlocked.Increment(ref succeeded);
                     successfulSourcePaths.Add(file.FullPath);
+                    successfulTransfers.Add(new FileTransferSuccess(file.FullPath, destination));
                 }
                 else
                 {
@@ -113,7 +115,108 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
             }
         });
 
-        return new FileTransferResult(succeeded, skipped, failures.OrderBy(failure => failure.FileName, StringComparer.CurrentCultureIgnoreCase).ToList(), successfulSourcePaths.ToList());
+        return new FileTransferResult(
+            succeeded,
+            skipped,
+            failures.OrderBy(failure => failure.FileName, StringComparer.CurrentCultureIgnoreCase).ToList(),
+            successfulSourcePaths.ToList(),
+            successfulTransfers.ToList());
+    }
+
+    /// <inheritdoc />
+    public async Task<FileTransferResult> DeleteAsync(
+        IReadOnlyCollection<FileItem> sourceFiles,
+        IProgress<FileTransferProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (sourceFiles.Count == 0)
+        {
+            return new FileTransferResult(0, 0, [], [], []);
+        }
+
+        var mtpFiles = sourceFiles.Where(file => file.SourceKind == StorageSourceKind.MtpDevice).ToList();
+        var localFiles = sourceFiles.Where(file => file.SourceKind == StorageSourceKind.LocalFileSystem).ToList();
+        var totalBytes = sourceFiles.Sum(file => file.Size);
+        var transferredBytes = 0L;
+        var completed = 0;
+        var succeeded = 0;
+        var skipped = 0;
+        var failures = new List<FileTransferFailure>();
+        var successfulSourcePaths = new List<string>();
+        var successfulTransfers = new List<FileTransferSuccess>();
+
+        /// <summary>将分批删除结果汇总到统一统计，并上报聚合进度。</summary>
+        /// <param name="result">单批删除结果。</param>
+        /// <param name="batchFiles">该批次实际处理的源文件集合。</param>
+        void MergeResult(FileTransferResult result, IReadOnlyCollection<FileItem> batchFiles)
+        {
+            succeeded += result.Succeeded;
+            skipped += result.Skipped;
+            failures.AddRange(result.Failures);
+            successfulSourcePaths.AddRange(result.SuccessfulSourcePaths);
+            successfulTransfers.AddRange(result.SuccessfulTransfers ?? []);
+            completed += batchFiles.Count;
+            transferredBytes += batchFiles.Sum(file => file.Size);
+            progress?.Report(new FileTransferProgress(completed, sourceFiles.Count, transferredBytes, totalBytes));
+        }
+
+        if (localFiles.Count > 0)
+        {
+            var localResult = await DeleteLocalAsync(localFiles, cancellationToken);
+            MergeResult(localResult, localFiles);
+        }
+
+        if (mtpFiles.Count > 0)
+        {
+            var mtpResult = await mtpDeviceService.DeleteFilesAsync(mtpFiles, null, cancellationToken);
+            MergeResult(mtpResult, mtpFiles);
+        }
+
+        return new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths, successfulTransfers);
+    }
+
+    /// <summary>批量删除本地文件并记录成功与失败明细。</summary>
+    /// <param name="sourceFiles">待删除本地文件集合。</param>
+    /// <param name="cancellationToken">用于终止批量删除的取消标记。</param>
+    /// <returns>本地删除结果。</returns>
+    private static Task<FileTransferResult> DeleteLocalAsync(IReadOnlyCollection<FileItem> sourceFiles, CancellationToken cancellationToken)
+    {
+        var succeeded = 0;
+        var failures = new List<FileTransferFailure>();
+        var successfulSourcePaths = new List<string>();
+        var successfulTransfers = new List<FileTransferSuccess>();
+
+        foreach (var file in sourceFiles)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                if (!File.Exists(file.FullPath))
+                {
+                    throw new FileNotFoundException("源文件已不存在", file.FullPath);
+                }
+
+                File.Delete(file.FullPath);
+                if (File.Exists(file.FullPath))
+                {
+                    throw new IOException("文件删除后仍存在，可能被占用");
+                }
+
+                succeeded++;
+                successfulSourcePaths.Add(file.FullPath);
+                successfulTransfers.Add(new FileTransferSuccess(file.FullPath, string.Empty));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                failures.Add(new FileTransferFailure(file.Name, file.FullPath, string.Empty, file.Size, file.SourceKind, exception.Message));
+            }
+        }
+
+        return Task.FromResult(new FileTransferResult(succeeded, 0, failures, successfulSourcePaths, successfulTransfers));
     }
 
     private static async Task<TransferOutcome> TransferOneAsync(

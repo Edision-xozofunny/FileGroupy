@@ -1,4 +1,7 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using MediaDevices;
 using FileGroupy.Models;
 
@@ -10,6 +13,15 @@ namespace FileGroupy.Services;
 /// </summary>
 public sealed class MtpDeviceService : IMtpDeviceService
 {
+    private static readonly object ScanCacheLock = new();
+    private static readonly Dictionary<string, CachedScan> ScanCache = new(StringComparer.Ordinal);
+    private static readonly TimeSpan ScanCacheLifetime = TimeSpan.FromHours(1);
+    private static readonly HashSet<string> ExcludedDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".thumbnails", "cache", "code_cache", "databases", "node_modules"
+    };
+    private const int MaximumEntriesPerDirectory = 20_000;
+
     /// <inheritdoc />
     public Task<IReadOnlyList<MtpDeviceInfo>> GetAvailablePortableDevicesAsync(CancellationToken cancellationToken = default) =>
         Task.Run(() =>
@@ -23,24 +35,17 @@ public sealed class MtpDeviceService : IMtpDeviceService
                     device.Connect();
                     try
                     {
-                        // Android 的 PTP 模式会被 WPD 报告为 Camera；U 盘和读卡器不会匹配这两个类型
-                        var protocol = device.DeviceType switch
-                        {
-                            DeviceType.Phone => PortableDeviceProtocol.Mtp,
-                            DeviceType.Camera => PortableDeviceProtocol.Ptp,
-                            _ => (PortableDeviceProtocol?)null
-                        };
+                        // iPhone 在 Windows 中通常通过 Apple Mobile Device 驱动以 PTP 设备出现，
+                        // 设备类型可能被报告为 Camera、MediaPlayer 或 Generic。
+                        var protocol = ResolvePortableProtocol(device);
                         if (protocol is null)
                         {
                             continue;
                         }
 
-                        var root = device.GetRootDirectory();
-                        // PTP 设备可能直接在根节点暴露媒体文件，不能仅以“存在子文件夹”判定可访问性
-                        if (!root.EnumerateFileSystemInfos().Any())
-                        {
-                            continue;
-                        }
+                        // 仅验证可访问根目录，不再要求根目录下必须可枚举到子项，
+                        // 避免 iPhone/PTP 设备因目录结构差异被误判为不可用。
+                        _ = device.GetRootDirectory();
 
                         devices.Add(new MtpDeviceInfo(device.DeviceId, device.FriendlyName, device.Manufacturer, protocol.Value));
                     }
@@ -112,12 +117,37 @@ public sealed class MtpDeviceService : IMtpDeviceService
         Task.Run(() => TransferFromLocal(sourceFiles, options, progress, cancellationToken), cancellationToken);
 
     /// <inheritdoc />
+    public Task<FileTransferResult> DeleteFilesAsync(
+        IReadOnlyCollection<FileItem> sourceFiles,
+        IProgress<FileTransferProgress>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        Task.Run(() => DeleteFiles(sourceFiles, progress, cancellationToken), cancellationToken);
+
+    /// <inheritdoc />
+    public void InvalidateScanCache(string deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return;
+        }
+
+        InvalidateCachedScans(deviceId);
+    }
+
+    /// <inheritdoc />
     public Task<string> DownloadPreviewFileAsync(FileItem file, CancellationToken cancellationToken = default) =>
         Task.Run(() => DownloadPreviewFile(file, cancellationToken), cancellationToken);
 
     /// <summary>在单个 MTP 会话中递归枚举设备根目录，避免设备不支持多会话并发造成的中断</summary>
     private static FolderScanResult Scan(MtpDeviceInfo deviceInfo, string rootPath, IProgress<FileScanProgress>? progress, CancellationToken cancellationToken)
     {
+        var cacheKey = GetScanCacheKey(deviceInfo.DeviceId, rootPath);
+        if (TryGetCachedScan(cacheKey, deviceInfo.DeviceId, out var cachedResult))
+        {
+            ReportCachedProgress(progress, cachedResult);
+            return cachedResult;
+        }
+
         using var device = MediaDevice.GetDevices().FirstOrDefault(candidate => candidate.DeviceId == deviceInfo.DeviceId)
             ?? throw new IOException("找不到设备请确认手机已解锁且处于文件传输模式");
         device.Connect();
@@ -141,14 +171,29 @@ public sealed class MtpDeviceService : IMtpDeviceService
 
                 try
                 {
+                    var entriesScanned = 0;
                     foreach (var entry in currentFolder.EnumerateFileSystemInfos())
                     {
                         cancellationToken.ThrowIfCancellationRequested();
+                        if (++entriesScanned > MaximumEntriesPerDirectory)
+                        {
+                            skippedItemCount++;
+                            break;
+                        }
+
                         try
                         {
                             if (entry is MediaDirectoryInfo directory)
                             {
-                                folders.Push(directory);
+                                if (ShouldScanDirectory(directory.Name))
+                                {
+                                    folders.Push(directory);
+                                }
+                                else
+                                {
+                                    skippedItemCount++;
+                                }
+
                                 continue;
                             }
 
@@ -160,8 +205,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
                             var extension = Path.GetExtension(file.Name);
                             var category = GetCategory(extension);
                             var fileLength = file.Length > long.MaxValue ? long.MaxValue : (long)file.Length;
-                            var lastWriteTime = file.LastWriteTime ?? DateTime.MinValue;
-                            files.Add(new FileItem(file.Name, file.FullName, extension, fileLength, lastWriteTime, category, StorageSourceKind.MtpDevice, deviceInfo.DeviceId));
+                            files.Add(new FileItem(file.Name, file.FullName, extension, fileLength, DateTime.MinValue, category, StorageSourceKind.MtpDevice, deviceInfo.DeviceId));
                             totalBytes += fileLength;
                             var current = categoryTotals[category];
                             categoryTotals[category] = new CategoryScanSummary(current.FileCount + 1, current.TotalSize + fileLength);
@@ -200,7 +244,9 @@ public sealed class MtpDeviceService : IMtpDeviceService
             }
 
             ReportProgress(progress, folderCount, files.Count, totalBytes, categoryTotals);
-            return new FolderScanResult($"{deviceInfo.DisplayName}（{GetProtocolName(deviceInfo.Protocol)}）/{rootPath}", folderCount, files, skippedItemCount);
+            var result = new FolderScanResult($"{deviceInfo.DisplayName}（{GetProtocolName(deviceInfo.Protocol)}）/{rootPath}", folderCount, files, skippedItemCount);
+            StoreCachedScan(cacheKey, deviceInfo.DeviceId, result);
+            return result;
         }
         finally
         {
@@ -237,6 +283,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
             var succeeded = 0;
             var skipped = 0;
             var successfulSourcePaths = new List<string>();
+            var successfulTransfers = new List<FileTransferSuccess>();
             var completed = 0;
             var transferredBytes = 0L;
             var totalBytes = sourceFiles.Sum(file => file.Size);
@@ -250,7 +297,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
                     var destinationPath = GetDestinationPath(file, options.DestinationPath, sourceRoot, options.PreserveSourceStructure);
                     if (options.RenameDuplicates && !options.PreserveSourceStructure)
                     {
-                        destinationPath = GetAvailableMtpPath(device, destinationPath);
+                        destinationPath = GetAvailableLocalPath(destinationPath);
                     }
                     if (File.Exists(destinationPath))
                     {
@@ -277,6 +324,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
 
                     succeeded++;
                     successfulSourcePaths.Add(file.FullPath);
+                    successfulTransfers.Add(new FileTransferSuccess(file.FullPath, destinationPath));
                 }
                 catch (OperationCanceledException)
                 {
@@ -295,7 +343,13 @@ public sealed class MtpDeviceService : IMtpDeviceService
                 }
             }
 
-            return new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths);
+            var result = new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths, successfulTransfers);
+            if (options.MoveFiles && succeeded > 0)
+            {
+                InvalidateCachedScans(deviceId);
+            }
+
+            return result;
         }
         finally
         {
@@ -348,6 +402,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
             var succeeded = 0;
             var skipped = 0;
             var successfulSourcePaths = new List<string>();
+            var successfulTransfers = new List<FileTransferSuccess>();
             var completed = 0;
             var transferredBytes = 0L;
             var totalBytes = sourceFiles.Sum(file => file.Size);
@@ -389,6 +444,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
 
                     succeeded++;
                     successfulSourcePaths.Add(file.FullPath);
+                    successfulTransfers.Add(new FileTransferSuccess(file.FullPath, destinationPath));
                 }
                 catch (OperationCanceledException)
                 {
@@ -410,7 +466,91 @@ public sealed class MtpDeviceService : IMtpDeviceService
                 }
             }
 
-            return new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths);
+            var result = new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths, successfulTransfers);
+            if (succeeded > 0)
+            {
+                InvalidateCachedScans(deviceId);
+            }
+
+            return result;
+        }
+        finally
+        {
+            device.Disconnect();
+        }
+    }
+
+    /// <summary>在同一设备会话中顺序删除文件，并返回可用于刷新界面的成功与失败明细。</summary>
+    /// <param name="sourceFiles">待删除的 MTP 文件集合。</param>
+    /// <param name="progress">可选的删除进度接收器。</param>
+    /// <param name="cancellationToken">用于中止删除任务的取消标记。</param>
+    /// <returns>删除结果。</returns>
+    private static FileTransferResult DeleteFiles(
+        IReadOnlyCollection<FileItem> sourceFiles,
+        IProgress<FileTransferProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var deviceId = sourceFiles.Select(file => file.SourceId).Distinct(StringComparer.Ordinal).SingleOrDefault();
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            throw new InvalidOperationException("MTP 文件缺少设备标识");
+        }
+
+        using var device = MediaDevice.GetDevices().FirstOrDefault(candidate => candidate.DeviceId == deviceId)
+            ?? throw new IOException("手机已断开连接请重新连接并解锁设备");
+        device.Connect();
+
+        try
+        {
+            var failures = new List<FileTransferFailure>();
+            var successfulSourcePaths = new List<string>();
+            var successfulTransfers = new List<FileTransferSuccess>();
+            var succeeded = 0;
+            var completed = 0;
+            var transferredBytes = 0L;
+            var totalBytes = sourceFiles.Sum(file => file.Size);
+            foreach (var file in sourceFiles)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    if (!device.FileExists(file.FullPath))
+                    {
+                        throw new FileNotFoundException("源文件已不存在", file.FullPath);
+                    }
+
+                    device.DeleteFile(file.FullPath);
+                    if (device.FileExists(file.FullPath))
+                    {
+                        throw new IOException("文件删除后仍存在");
+                    }
+
+                    succeeded++;
+                    successfulSourcePaths.Add(file.FullPath);
+                    successfulTransfers.Add(new FileTransferSuccess(file.FullPath, string.Empty));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    failures.Add(new FileTransferFailure(file.Name, file.FullPath, string.Empty, file.Size, file.SourceKind, exception.Message));
+                }
+                finally
+                {
+                    completed++;
+                    transferredBytes += file.Size;
+                    progress?.Report(new FileTransferProgress(completed, sourceFiles.Count, transferredBytes, totalBytes));
+                }
+            }
+
+            if (succeeded > 0)
+            {
+                InvalidateCachedScans(deviceId);
+            }
+
+            return new FileTransferResult(succeeded, 0, failures, successfulSourcePaths, successfulTransfers);
         }
         finally
         {
@@ -421,6 +561,166 @@ public sealed class MtpDeviceService : IMtpDeviceService
     /// <summary>生成分类统计副本并上报给 UI，防止后台集合被跨线程读取</summary>
     private static void ReportProgress(IProgress<FileScanProgress>? progress, int folders, int files, long bytes, IReadOnlyDictionary<FileCategory, CategoryScanSummary> categories) =>
         progress?.Report(new FileScanProgress(folders, files, bytes, new Dictionary<FileCategory, CategoryScanSummary>(categories)));
+
+    /// <summary>根据 WPD 设备信息推断 MTP 或 PTP 协议，兼容 iPhone 等被识别为 Generic 或 MediaPlayer 的设备。</summary>
+    /// <param name="device">已建立连接的便携设备实例。</param>
+    /// <returns>可支持的协议类型；未知类型返回 <see langword="null"/>。</returns>
+    private static PortableDeviceProtocol? ResolvePortableProtocol(MediaDevice device)
+    {
+        if (device.DeviceType == DeviceType.Phone)
+        {
+            return PortableDeviceProtocol.Mtp;
+        }
+
+        if (device.DeviceType == DeviceType.Camera)
+        {
+            return PortableDeviceProtocol.Ptp;
+        }
+
+        var manufacturer = device.Manufacturer ?? string.Empty;
+        var friendlyName = device.FriendlyName ?? string.Empty;
+        if (manufacturer.Contains("Apple", StringComparison.OrdinalIgnoreCase)
+            || friendlyName.Contains("iPhone", StringComparison.OrdinalIgnoreCase)
+            || friendlyName.Contains("iPad", StringComparison.OrdinalIgnoreCase))
+        {
+            return PortableDeviceProtocol.Ptp;
+        }
+
+        if (device.DeviceType is DeviceType.MediaPlayer or DeviceType.Generic)
+        {
+            return PortableDeviceProtocol.Ptp;
+        }
+
+        return null;
+    }
+
+    private static void ReportCachedProgress(IProgress<FileScanProgress>? progress, FolderScanResult result)
+    {
+        var categories = Enum.GetValues<FileCategory>().ToDictionary(category => category, _ => new CategoryScanSummary(0, 0));
+        var totalBytes = 0L;
+        foreach (var file in result.Files)
+        {
+            totalBytes += file.Size;
+            var current = categories[file.Category];
+            categories[file.Category] = new CategoryScanSummary(current.FileCount + 1, current.TotalSize + file.Size);
+        }
+
+        ReportProgress(progress, result.FolderCount, result.Files.Count, totalBytes, categories);
+    }
+
+    private static string GetScanCacheKey(string deviceId, string rootPath) => $"{deviceId}\n{rootPath}";
+
+    private static bool TryGetCachedScan(string cacheKey, string deviceId, out FolderScanResult result)
+    {
+        lock (ScanCacheLock)
+        {
+            if (ScanCache.TryGetValue(cacheKey, out var cachedScan) && DateTimeOffset.UtcNow - cachedScan.CreatedAt <= ScanCacheLifetime)
+            {
+                result = cachedScan.Result;
+                return true;
+            }
+
+            ScanCache.Remove(cacheKey);
+        }
+
+        if (TryReadPersistentScan(deviceId, cacheKey, out var persistedCachedScan))
+        {
+            lock (ScanCacheLock)
+            {
+                ScanCache[cacheKey] = persistedCachedScan;
+            }
+
+            result = persistedCachedScan.Result;
+            return true;
+        }
+
+        result = null!;
+        return false;
+    }
+
+    private static void StoreCachedScan(string cacheKey, string deviceId, FolderScanResult result)
+    {
+        var cachedScan = new CachedScan(result, DateTimeOffset.UtcNow);
+        lock (ScanCacheLock)
+        {
+            ScanCache[cacheKey] = cachedScan;
+        }
+
+        WritePersistentScan(deviceId, cacheKey, cachedScan);
+    }
+
+    private static void InvalidateCachedScans(string deviceId)
+    {
+        lock (ScanCacheLock)
+        {
+            foreach (var cacheKey in ScanCache.Keys.Where(cacheKey => cacheKey.StartsWith($"{deviceId}\n", StringComparison.Ordinal)).ToArray())
+            {
+                ScanCache.Remove(cacheKey);
+            }
+        }
+
+        try
+        {
+            var deviceCacheDirectory = GetDeviceCacheDirectory(deviceId);
+            if (Directory.Exists(deviceCacheDirectory))
+            {
+                Directory.Delete(deviceCacheDirectory, true);
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    private static bool ShouldScanDirectory(string directoryName) => !ExcludedDirectoryNames.Contains(directoryName);
+
+    private static bool TryReadPersistentScan(string deviceId, string cacheKey, out CachedScan cachedScan)
+    {
+        var cacheFilePath = GetCacheFilePath(deviceId, cacheKey);
+        try
+        {
+            if (File.Exists(cacheFilePath))
+            {
+                var savedScan = JsonSerializer.Deserialize<CachedScan>(File.ReadAllText(cacheFilePath));
+                if (savedScan is not null && DateTimeOffset.UtcNow - savedScan.CreatedAt <= ScanCacheLifetime)
+                {
+                    cachedScan = savedScan;
+                    return true;
+                }
+            }
+
+            File.Delete(cacheFilePath);
+        }
+        catch (IOException) { }
+        catch (JsonException) { }
+        catch (UnauthorizedAccessException) { }
+
+        cachedScan = null!;
+        return false;
+    }
+
+    private static void WritePersistentScan(string deviceId, string cacheKey, CachedScan cachedScan)
+    {
+        try
+        {
+            var cacheFilePath = GetCacheFilePath(deviceId, cacheKey);
+            Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+            var temporaryPath = $"{cacheFilePath}.{Guid.NewGuid():N}.tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(cachedScan));
+            File.Move(temporaryPath, cacheFilePath, true);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    private static string GetCacheFilePath(string deviceId, string cacheKey) =>
+        Path.Combine(GetDeviceCacheDirectory(deviceId), $"{GetHash(cacheKey)}.json");
+
+    private static string GetDeviceCacheDirectory(string deviceId) =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileGroupy", "MtpScanCache", GetHash(deviceId));
+
+    private static string GetHash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private sealed record CachedScan(FolderScanResult Result, DateTimeOffset CreatedAt);
 
     /// <summary>根据扩展名确定内置分类</summary>
     private static FileCategory GetCategory(string extension) => FileCategoryCatalog.GetCategory(extension);
@@ -487,6 +787,27 @@ public sealed class MtpDeviceService : IMtpDeviceService
         if (File.Exists(sourcePath))
         {
             throw new IOException("目标上传完成，但无法删除本地源文件");
+        }
+    }
+
+    /// <summary>在 MTP 存储中查找可用的原名或“名称 (n).扩展名”目标路径</summary>
+    private static string GetAvailableLocalPath(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return path;
+        }
+
+        var directory = Path.GetDirectoryName(path)!;
+        var name = Path.GetFileNameWithoutExtension(path);
+        var extension = Path.GetExtension(path);
+        for (var suffix = 1; ; suffix++)
+        {
+            var candidate = Path.Combine(directory, $"{name} ({suffix}){extension}");
+            if (!File.Exists(candidate))
+            {
+                return candidate;
+            }
         }
     }
 

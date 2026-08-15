@@ -30,98 +30,112 @@
             <Button Grid.Column="5" Command="{Binding CollapseAllCommand}" Content="收缩" Style="{StaticResource NeutralButton}" Padding="16,7" Margin="8,0,0,0" />
         </Grid>
         <Grid Grid.Row="2">
-            <controls:StickyDataGrid x:Name="FilesGrid" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderBrush="#E2E8F0" BorderThickness="1" Background="{StaticResource SurfaceBrush}" RowHeaderWidth="0" FrozenColumnCount="2"
-                hc:DataGridAttach.ShowRowNumber="True" hc:DataGridAttach.ShowSelectAllButton="True"
-                SelectionMode="Extended" EnableRowVirtualization="True" EnableColumnVirtualization="True"
-                VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
-                ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                PreviewMouseLeftButtonDown="FilesGrid_OnPreviewMouseLeftButtonDown" PreviewMouseMove="FilesGrid_OnPreviewMouseMove" PreviewMouseLeftButtonUp="FilesGrid_OnPreviewMouseLeftButtonUp"
-                MouseDoubleClick="FilesGrid_OnMouseDoubleClick" ContextMenuOpening="FilesGrid_OnContextMenuOpening">
-                <DataGrid.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem x:Name="OpenMenuItem" Header="打开" Visibility="Collapsed" Click="OpenMenuItem_OnClick" />
-                        <MenuItem x:Name="OpenWithMenuItem" Header="打开方式" Visibility="Collapsed" Click="OpenWithMenuItem_OnClick" />
-                        <MenuItem x:Name="OpenLocationMenuItem" Header="打开文件位置" Visibility="Collapsed" Click="OpenLocationMenuItem_OnClick" />
-                        <Separator x:Name="OpenMenuSeparator" Visibility="Collapsed" />
-                        <MenuItem Header="复制到..." Command="{Binding PlacementTarget.DataContext.CopySelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <MenuItem Header="移动到..." Command="{Binding PlacementTarget.DataContext.MoveSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                    </ContextMenu>
-                </DataGrid.ContextMenu>
-                <DataGrid.Columns>
-                    <DataGridTemplateColumn Width="44">
-                        <DataGridTemplateColumn.Header>
-                            <CheckBox IsChecked="{Binding DataContext.IsAllSelected, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                      Click="SelectAllCheckBox_OnClick" />
-                        </DataGridTemplateColumn.Header>
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" IsEnabled="{Binding IsSelectable}"
-                        Click="FileCheckBox_OnClick" HorizontalAlignment="Center" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="名称" Width="2*">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Button Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="4" HorizontalContentAlignment="Left">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                            <Setter Property="Padding" Value="30,5,5,5" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsCategory}" Value="True">
-                                                    <Setter Property="Padding" Value="8,7,5,7" />
-                                                    <Setter Property="Background" Value="#F8FAFC" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding DisplayName}" Foreground="#344054">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsCategory}" Value="True">
-                                                            <Setter Property="FontWeight" Value="SemiBold" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Button>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="类型" Binding="{Binding TypeDisplayName}" Width="155" />
-                    <DataGridTextColumn Header="大小" Binding="{Binding Size}" Width="110" />
-                    <DataGridTextColumn Header="修改时间" Binding="{Binding Modified}" Width="150" />
-                    <DataGridTextColumn Header="位置" Binding="{Binding Location}" Width="3*" />
-                </DataGrid.Columns>
-            </controls:StickyDataGrid>
-                        <Border Panel.ZIndex="100" Background="#F1F5F9" BorderBrush="#DCE3EC" BorderThickness="0,0,0,1" Height="38" Margin="0,40,12,0" VerticalAlignment="Top"
-                            DataContext="{Binding StickyItem, ElementName=FilesGrid}" IsHitTestVisible="False" SnapsToDevicePixels="True">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Border Grid.Row="0">
                 <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="Visibility" Value="Visible" />
+                    <Style TargetType="Border" BasedOn="{StaticResource ExplorerStickyPanelBorder}">
+                        <Setter Property="Visibility" Value="Collapsed" />
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding}" Value="{x:Null}">
-                                <Setter Property="Visibility" Value="Collapsed" />
+                            <DataTrigger Binding="{Binding StickyItems.Count, ElementName=FilesGrid}" Value="1">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding StickyItems.Count, ElementName=FilesGrid}" Value="2">
+                                <Setter Property="Visibility" Value="Visible" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
-                <Grid Margin="10,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="110" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Foreground="#344054" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="2" Text="{Binding Size}" Foreground="#667085" VerticalAlignment="Center" />
-                </Grid>
+                <ItemsControl ItemsSource="{Binding StickyItems, ElementName=FilesGrid}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource ExplorerStickyItemButton}"
+                                    Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}">
+                                <Grid Height="22">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="44" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Style="{StaticResource ExplorerStickyItemText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="6,0,4,0" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Size}" Foreground="#667085" VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </Border>
-            <Border x:Name="SelectionBox" Visibility="Collapsed" BorderBrush="#1677FF" BorderThickness="1" Background="#261677FF" IsHitTestVisible="False" />
+            <Grid Grid.Row="1">
+                <controls:StickyDataGrid x:Name="FilesGrid" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                    HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderBrush="#E2E8F0" BorderThickness="1" Background="{StaticResource SurfaceBrush}" RowHeaderWidth="0" FrozenColumnCount="2"
+                    hc:DataGridAttach.ShowRowNumber="True" hc:DataGridAttach.ShowSelectAllButton="True"
+                    SelectionMode="Extended" EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                    VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
+                    ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                    PreviewMouseLeftButtonDown="FilesGrid_OnPreviewMouseLeftButtonDown" PreviewMouseMove="FilesGrid_OnPreviewMouseMove" PreviewMouseLeftButtonUp="FilesGrid_OnPreviewMouseLeftButtonUp"
+                    MouseMove="FilesGrid_OnMouseMove" MouseLeave="FilesGrid_OnMouseLeave"
+                    MouseDoubleClick="FilesGrid_OnMouseDoubleClick" ContextMenuOpening="FilesGrid_OnContextMenuOpening">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem x:Name="OpenMenuItem" Header="打开" Visibility="Collapsed" Click="OpenMenuItem_OnClick" />
+                            <MenuItem x:Name="OpenWithMenuItem" Header="打开方式" Visibility="Collapsed" Click="OpenWithMenuItem_OnClick" />
+                            <MenuItem x:Name="OpenLocationMenuItem" Header="打开文件位置" Visibility="Collapsed" Click="OpenLocationMenuItem_OnClick" />
+                            <Separator x:Name="OpenMenuSeparator" Visibility="Collapsed" />
+                            <MenuItem Header="复制到..." Command="{Binding PlacementTarget.DataContext.CopySelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="移动到..." Command="{Binding PlacementTarget.DataContext.MoveSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem x:Name="DeleteMenuItem" Header="删除..." Command="{Binding PlacementTarget.DataContext.DeleteSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Width="44">
+                            <DataGridTemplateColumn.Header>
+                                <CheckBox IsChecked="{Binding DataContext.IsAllSelected, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                          Click="SelectAllCheckBox_OnClick" />
+                            </DataGridTemplateColumn.Header>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" IsEnabled="{Binding IsSelectable}"
+                            Click="FileCheckBox_OnClick" HorizontalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="名称" Width="2*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Style="{StaticResource ExplorerTreeItemButton}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding DisplayName}" Style="{StaticResource ExplorerTreeItemText}" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="类型" Binding="{Binding TypeDisplayName}" Width="155" />
+                        <DataGridTextColumn Header="大小" Binding="{Binding Size}" Width="110" />
+                        <DataGridTextColumn Header="修改时间" Binding="{Binding Modified}" Width="150" />
+                        <DataGridTextColumn Header="位置" Binding="{Binding Location}" Width="3*" />
+                    </DataGrid.Columns>
+                </controls:StickyDataGrid>
+                <Border x:Name="SelectionBox" Visibility="Collapsed" BorderBrush="#1677FF" BorderThickness="1" Background="#261677FF" IsHitTestVisible="False" />
+                <Popup x:Name="ImageHoverPopup" Placement="Relative" StaysOpen="True" AllowsTransparency="True" IsHitTestVisible="False" IsOpen="False">
+                    <Border Style="{StaticResource ExplorerImageHoverPopupBorder}" Width="300">
+                        <Grid>
+                            <Image x:Name="ImageHoverPreviewImage" Height="180" Stretch="Uniform" />
+                            <Border Background="#66000000" CornerRadius="6" Padding="8" VerticalAlignment="Bottom" Margin="0,0,0,0">
+                                <StackPanel>
+                                    <TextBlock x:Name="ImageHoverResolutionText" Foreground="#F9FAFB" FontSize="12" />
+                                    <TextBlock x:Name="ImageHoverSizeText" Foreground="#F9FAFB" FontSize="12" />
+                                    <TextBlock x:Name="ImageHoverTypeText" Foreground="#F9FAFB" FontSize="12" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock x:Name="ImageHoverCorruptedText" Text="该图像已损坏" Foreground="#FECACA" FontWeight="SemiBold" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                        </Grid>
+                    </Border>
+                </Popup>
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>

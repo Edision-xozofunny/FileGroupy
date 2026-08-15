@@ -165,6 +165,14 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
     [RelayCommand]
     private void OpenCategory(FileCategory category) => CategoryRequested?.Invoke(this, category);
 
+    /// <summary>接收文件浏览页的增删改结果并刷新概览卡片与统计信息。</summary>
+    /// <param name="result">基于当前扫描路径的最新文件集合快照。</param>
+    public void ApplyExplorerSnapshot(FolderScanResult result)
+    {
+        SelectedPath = result.Path;
+        Populate(result);
+    }
+
     private void Populate(FolderScanResult result)
     {
         InitializeCategories();

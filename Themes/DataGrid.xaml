@@ -40,4 +40,66 @@
       <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#DCEBFF" /></Trigger>
     </Style.Triggers>
   </Style>
+  <Style x:Key="ExplorerTreeItemButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Padding" Value="56,5,5,5" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsCategory}" Value="True">
+        <Setter Property="Padding" Value="8,7,5,7" />
+        <Setter Property="Background" Value="#F8FAFC" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding IsExtensionGroup}" Value="True">
+        <Setter Property="Padding" Value="32,6,5,6" />
+        <Setter Property="Background" Value="#FCFDFE" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="ExplorerTreeItemText" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="#344054" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsCategory}" Value="True">
+        <Setter Property="FontWeight" Value="SemiBold" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding IsExtensionGroup}" Value="True">
+        <Setter Property="Foreground" Value="#475467" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="ExplorerStickyPanelBorder" TargetType="Border">
+    <Setter Property="Background" Value="#F8FAFC" />
+    <Setter Property="BorderBrush" Value="#DCE3EC" />
+    <Setter Property="BorderThickness" Value="1,0,1,0" />
+    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="Padding" Value="0,2,0,2" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+  </Style>
+  <Style x:Key="ExplorerStickyItemButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Background" Value="#EEF4FF" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Margin" Value="0,1,0,1" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsExtensionGroup}" Value="True">
+        <Setter Property="Background" Value="#F8FAFC" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="ExplorerStickyItemText" TargetType="TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="#344054" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsExtensionGroup}" Value="True">
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="#475467" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="ExplorerImageHoverPopupBorder" TargetType="Border">
+    <Setter Property="Background" Value="#D9182230" />
+    <Setter Property="BorderBrush" Value="#4CFFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="10" />
+  </Style>
 </ResourceDictionary>

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileGroupy.Models;
@@ -30,6 +32,14 @@ public partial class FileExplorerViewModel(
     private CancellationTokenSource? _searchCancellationTokenSource;
     /// <summary>树批量操作版本，用于丢弃较早异步操作的过期结果</summary>
     private int _treeOperationVersion;
+    /// <summary>最近一次扫描结果的展示路径，用于操作后回写概览统计。</summary>
+    private string _currentScanPath = string.Empty;
+    /// <summary>最近一次扫描结果中的目录数量，用于维持概览页统计结构一致。</summary>
+    private int _currentFolderCount;
+    /// <summary>最近一次扫描结果中的跳过项数量，用于维持概览页文案。</summary>
+    private int _currentSkippedItemCount;
+    /// <summary>当前结果是否来自本地目录扫描，用于判定复制或移动后是否可补充新增节点。</summary>
+    private bool _isLocalScan;
 
     /// <summary>绑定到表格的根行和文件子行集合</summary>
     public ObservableCollection<ExplorerRow> Rows { get; } = [];
@@ -50,6 +60,9 @@ public partial class FileExplorerViewModel(
     [ObservableProperty] private bool _isTreeOperationInProgress;
     /// <summary>由工具生成的文件模糊检索关键字公开绑定属性</summary>
     [ObservableProperty] private string _searchQuery = string.Empty;
+
+    /// <summary>文件集合发生增删改后触发，供概览页和分类卡片同步刷新。</summary>
+    public event EventHandler<FolderScanResult>? FilesChanged;
 
     /// <summary>接收新扫描结果，清除筛选并显示全部分类</summary>
     /// <param name="result">最新的目录扫描结果</param>
@@ -74,6 +87,10 @@ public partial class FileExplorerViewModel(
         _searchMatchedPaths = null;
         SearchQuery = string.Empty;
         _categoryFilter = null;
+        _currentScanPath = result.Path;
+        _currentFolderCount = result.FolderCount;
+        _currentSkippedItemCount = result.SkippedItemCount;
+        _isLocalScan = result.Files.Count == 0 || result.Files.All(file => file.SourceKind == StorageSourceKind.LocalFileSystem);
         Title = "全部文件";
         Subtitle = result.SkippedItemCount == 0
             ? $"{result.Path}  |  {result.Files.Count:N0} 个文件"
@@ -94,6 +111,10 @@ public partial class FileExplorerViewModel(
         _expandedCategories.Clear();
         _expandedCategories.UnionWith(Enum.GetValues<FileCategory>());
         _categoryFilter = null;
+        _currentScanPath = string.Empty;
+        _currentFolderCount = 0;
+        _currentSkippedItemCount = 0;
+        _isLocalScan = false;
         Rows.Clear();
         Title = "全部文件";
         Subtitle = "选择文件夹后，以文件类型为根节点浏览内容";
@@ -211,6 +232,10 @@ public partial class FileExplorerViewModel(
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task MoveSelectedAsync() => await ShowTransferDialogAsync(true);
 
+    /// <summary>打开删除对话框，执行批量删除并同步刷新树节点和概览统计。</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task DeleteSelectedAsync() => await ShowDeleteDialogAsync();
+
     private bool HasSelection() => SelectedFileCount > 0;
 
     /// <summary>仅允许对实际文件行执行 Windows Shell 打开操作</summary>
@@ -276,6 +301,66 @@ public partial class FileExplorerViewModel(
     private static bool CanOpenLocalFile(ExplorerRow? row) =>
         row?.File?.SourceKind == StorageSourceKind.LocalFileSystem;
 
+    /// <summary>确保右键行至少被加入当前选择集合，便于单文件直接执行复制、移动或删除。</summary>
+    /// <param name="row">右键命中的表格行。</param>
+    public void EnsureContextRowSelected(ExplorerRow row)
+    {
+        if (row.File is null)
+        {
+            return;
+        }
+
+        if (_selectedPaths.Contains(row.File.FullPath))
+        {
+            return;
+        }
+
+        _selectedPaths.Add(row.File.FullPath);
+        SynchronizeVisibleSelection();
+    }
+
+    /// <summary>为图片文件构建悬停预览数据；无法解码时返回损坏提示。</summary>
+    /// <param name="row">当前鼠标所在表格行。</param>
+    /// <param name="cancellationToken">用于取消预览加载的标记。</param>
+    /// <returns>图片悬停预览数据；非图片行返回 <see langword="null"/>。</returns>
+    public async Task<ImageHoverPreview?> CreateImageHoverPreviewAsync(ExplorerRow row, CancellationToken cancellationToken = default)
+    {
+        if (row.File is null || row.File.Category != FileCategory.Images)
+        {
+            return null;
+        }
+
+        try
+        {
+            var preview = await previewService.CreatePreviewAsync(row.File, cancellationToken);
+            if (preview?.ImageSource is not ImageSource imageSource)
+            {
+                return new ImageHoverPreview(null, "未知", SizeFormatter.Format(row.File.Size), row.File.Extension.ToUpperInvariant(), true);
+            }
+
+            var resolution = preview.ImageSource is System.Windows.Media.Imaging.BitmapSource bitmap
+                ? $"{bitmap.PixelWidth} × {bitmap.PixelHeight}"
+                : "未知";
+            return new ImageHoverPreview(
+                imageSource,
+                resolution,
+                SizeFormatter.Format(row.File.Size),
+                string.IsNullOrWhiteSpace(row.File.Extension) ? "未知" : row.File.Extension.ToUpperInvariant(),
+                false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return new ImageHoverPreview(null, "未知", SizeFormatter.Format(row.File.Size), row.File.Extension.ToUpperInvariant(), true);
+        }
+    }
+
+    /// <summary>打开复制或移动对话框，并在完成后刷新树数据、缓存与提示信息。</summary>
+    /// <param name="moveFiles">是否以移动模式执行。</param>
+    /// <returns>异步任务。</returns>
     private async Task ShowTransferDialogAsync(bool moveFiles)
     {
         var selectedFiles = _files.Where(file => _selectedPaths.Contains(file.FullPath)).ToList();
@@ -285,22 +370,154 @@ public partial class FileExplorerViewModel(
             Owner = System.Windows.Application.Current.MainWindow
         };
         dialog.ShowDialog();
-        if (moveFiles && dialogViewModel.MovedSourcePaths.Count > 0)
+        if (dialogViewModel.LastResult is { } result)
         {
-            RemoveMovedFiles(dialogViewModel.MovedSourcePaths);
+            ApplyTransferResult(moveFiles, result);
+            foreach (var sourceDeviceId in selectedFiles.Where(file => file.SourceKind == StorageSourceKind.MtpDevice)
+                         .Select(file => file.SourceId)
+                         .Where(deviceId => !string.IsNullOrWhiteSpace(deviceId))
+                         .Distinct(StringComparer.Ordinal)
+                         .Cast<string>())
+            {
+                mtpDeviceService.InvalidateScanCache(sourceDeviceId);
+            }
+
+            if (dialogViewModel.DestinationMtpDevice is { } destinationMtp)
+            {
+                mtpDeviceService.InvalidateScanCache(destinationMtp.DeviceId);
+            }
+
+            ShowOperationResultMessage(moveFiles ? "移动" : "复制", result.Succeeded, result.Skipped, result.Failures.Count);
         }
 
         await Task.CompletedTask;
     }
 
-    /// <summary>移除已成功移动的源文件，避免保留失效行导致重复复制或移动</summary>
-    private void RemoveMovedFiles(IEnumerable<string> movedSourcePaths)
+    /// <summary>打开删除对话框并在完成后同步树节点、缓存和结果提示。</summary>
+    /// <returns>异步任务。</returns>
+    private async Task ShowDeleteDialogAsync()
     {
-        var movedPaths = movedSourcePaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        _files.RemoveAll(file => movedPaths.Contains(file.FullPath));
-        _selectedPaths.ExceptWith(movedPaths);
-        _searchMatchedPaths?.ExceptWith(movedPaths);
+        var selectedFiles = _files.Where(file => _selectedPaths.Contains(file.FullPath)).ToList();
+        var dialogViewModel = new FileDeleteDialogViewModel(transferService, selectedFiles);
+        var dialog = new FileDeleteDialog(dialogViewModel)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        dialog.ShowDialog();
+        if (dialogViewModel.LastResult is { } result)
+        {
+            RemoveFilesBySourcePaths(result.SuccessfulSourcePaths);
+            BuildRows();
+            foreach (var deviceId in selectedFiles.Where(file => file.SourceKind == StorageSourceKind.MtpDevice)
+                         .Select(file => file.SourceId)
+                         .Where(deviceId => !string.IsNullOrWhiteSpace(deviceId))
+                         .Distinct(StringComparer.Ordinal)
+                         .Cast<string>())
+            {
+                mtpDeviceService.InvalidateScanCache(deviceId);
+            }
+
+            NotifyFilesChanged();
+            ShowOperationResultMessage("删除", result.Succeeded, result.Skipped, result.Failures.Count);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>根据复制或移动结果更新树节点，并广播统计刷新事件。</summary>
+    /// <param name="moveFiles">是否为移动模式。</param>
+    /// <param name="result">操作结果。</param>
+    private void ApplyTransferResult(bool moveFiles, FileTransferResult result)
+    {
+        if (moveFiles)
+        {
+            RemoveFilesBySourcePaths(result.SuccessfulSourcePaths);
+        }
+
+        var successfulTransfers = result.SuccessfulTransfers ?? [];
+        if (successfulTransfers.Count > 0)
+        {
+            AddLocalDestinationFiles(successfulTransfers);
+        }
+
         BuildRows();
+        NotifyFilesChanged();
+    }
+
+    /// <summary>显示复制、移动或删除的结果提示，便于用户确认任务是否完成。</summary>
+    /// <param name="operationName">操作名称。</param>
+    /// <param name="succeeded">成功数量。</param>
+    /// <param name="skipped">跳过数量。</param>
+    /// <param name="failed">失败数量。</param>
+    private static void ShowOperationResultMessage(string operationName, int succeeded, int skipped, int failed)
+    {
+        var message = $"{operationName}完成：成功 {succeeded:N0}，跳过 {skipped:N0}，失败 {failed:N0}";
+        System.Windows.MessageBox.Show(
+            System.Windows.Application.Current.MainWindow,
+            message,
+            $"{operationName}结果",
+            System.Windows.MessageBoxButton.OK,
+            failed == 0 ? System.Windows.MessageBoxImage.Information : System.Windows.MessageBoxImage.Warning);
+    }
+
+    /// <summary>按成功源路径集合删除当前树中的文件项，并同步选择与搜索状态。</summary>
+    /// <param name="sourcePaths">需要移除的源路径集合。</param>
+    private void RemoveFilesBySourcePaths(IEnumerable<string> sourcePaths)
+    {
+        var removedPathSet = sourcePaths.Select(NormalizeSourcePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (removedPathSet.Count == 0)
+        {
+            return;
+        }
+
+        _files.RemoveAll(file => removedPathSet.Contains(NormalizeSourcePath(file.FullPath)));
+        _selectedPaths.RemoveWhere(path => removedPathSet.Contains(NormalizeSourcePath(path)));
+        _searchMatchedPaths?.RemoveWhere(path => removedPathSet.Contains(NormalizeSourcePath(path)));
+    }
+
+    /// <summary>将目标落在当前本地扫描范围内的新文件补充到树数据中。</summary>
+    /// <param name="successfulTransfers">成功传输的源目标映射集合。</param>
+    private void AddLocalDestinationFiles(IReadOnlyList<FileTransferSuccess> successfulTransfers)
+    {
+        if (!_isLocalScan || string.IsNullOrWhiteSpace(_currentScanPath))
+        {
+            return;
+        }
+
+        var currentRoot = NormalizeSourcePath(_currentScanPath);
+        foreach (var transfer in successfulTransfers)
+        {
+            if (string.IsNullOrWhiteSpace(transfer.DestinationPath))
+            {
+                continue;
+            }
+
+            var destinationPath = NormalizeSourcePath(transfer.DestinationPath);
+            if (!destinationPath.StartsWith(currentRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(destinationPath))
+            {
+                continue;
+            }
+
+            if (_files.Any(file => string.Equals(NormalizeSourcePath(file.FullPath), destinationPath, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var info = new FileInfo(destinationPath);
+            var category = FileCategoryCatalog.GetCategory(info.Extension);
+            _files.Add(new FileItem(info.Name, info.FullName, info.Extension, info.Length, info.LastWriteTime, category));
+        }
+    }
+
+    /// <summary>通知概览页使用当前树数据重新计算卡片、统计和筛选结果。</summary>
+    private void NotifyFilesChanged()
+    {
+        if (string.IsNullOrWhiteSpace(_currentScanPath))
+        {
+            return;
+        }
+
+        FilesChanged?.Invoke(this, new FolderScanResult(_currentScanPath, _currentFolderCount, _files.ToList(), _currentSkippedItemCount));
     }
 
     partial void OnSearchQueryChanged(string value) => _ = ApplySearchAsync(value);
@@ -447,6 +664,7 @@ public partial class FileExplorerViewModel(
         IsAllSelected = _files.Count > 0 && _files.All(file => _selectedPaths.Contains(file.FullPath));
         CopySelectedCommand.NotifyCanExecuteChanged();
         MoveSelectedCommand.NotifyCanExecuteChanged();
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>供视图的拖拽框选行为调用，批量改变矩形范围内文件行的选择状态</summary>
@@ -473,9 +691,17 @@ public partial class FileExplorerViewModel(
         SynchronizeVisibleSelection();
     }
 
+    /// <summary>构建当前树行数据；万级数据时改为异步分批写入以降低主线程卡顿。</summary>
     private void BuildRows()
     {
-        _treeOperationVersion++;
+        var operationVersion = ++_treeOperationVersion;
+        if (_files.Count >= 10_000)
+        {
+            IsTreeOperationInProgress = true;
+            _ = RebuildRowsAsync(operationVersion);
+            return;
+        }
+
         IsTreeOperationInProgress = false;
         ApplyRows(CreateRows());
     }
@@ -534,7 +760,9 @@ public partial class FileExplorerViewModel(
                                 Name = file.Name,
                                 Extension = file.Extension.ToUpperInvariant(),
                                 Location = file.FullPath,
-                                Modified = file.LastModified.ToString("yyyy-MM-dd HH:mm"),
+                                Modified = file.SourceKind == StorageSourceKind.MtpDevice && file.LastModified == DateTime.MinValue
+                                    ? "未读取"
+                                    : file.LastModified.ToString("yyyy-MM-dd HH:mm"),
                                 Size = SizeFormatter.Format(file.Size),
                                 File = file,
                                 IsSelected = _selectedPaths.Contains(file.FullPath)
@@ -628,17 +856,38 @@ public partial class FileExplorerViewModel(
     /// </summary>
     private void SynchronizeVisibleSelection()
     {
+        var categoryTotals = new Dictionary<FileCategory, int>();
+        var categorySelected = new Dictionary<FileCategory, int>();
+        var extensionTotals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var extensionSelected = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in _files)
+        {
+            categoryTotals[file.Category] = categoryTotals.GetValueOrDefault(file.Category) + 1;
+            if (_selectedPaths.Contains(file.FullPath))
+            {
+                categorySelected[file.Category] = categorySelected.GetValueOrDefault(file.Category) + 1;
+            }
+
+            var extensionKey = GetExtensionKey(file.Category, GetExtensionGroup(file.Extension));
+            extensionTotals[extensionKey] = extensionTotals.GetValueOrDefault(extensionKey) + 1;
+            if (_selectedPaths.Contains(file.FullPath))
+            {
+                extensionSelected[extensionKey] = extensionSelected.GetValueOrDefault(extensionKey) + 1;
+            }
+        }
+
         foreach (var row in Rows)
         {
             if (row.IsCategory)
             {
-                row.IsSelected = _files.Any(file => file.Category == row.Category)
-                    && _files.Where(file => file.Category == row.Category).All(file => _selectedPaths.Contains(file.FullPath));
+                row.IsSelected = categoryTotals.GetValueOrDefault(row.Category) > 0
+                    && categorySelected.GetValueOrDefault(row.Category) == categoryTotals[row.Category];
             }
             else if (row.IsExtensionGroup)
             {
-                row.IsSelected = _files.Where(file => file.Category == row.Category && BelongsToExtensionGroup(file, row.GroupExtension))
-                    .All(file => _selectedPaths.Contains(file.FullPath));
+                var extensionKey = GetExtensionKey(row.Category, row.GroupExtension);
+                row.IsSelected = extensionTotals.GetValueOrDefault(extensionKey) > 0
+                    && extensionSelected.GetValueOrDefault(extensionKey) == extensionTotals[extensionKey];
             }
             else if (row.File is not null)
             {
@@ -663,6 +912,12 @@ public partial class FileExplorerViewModel(
     /// <summary>生成可唯一定位一个扩展名分组节点的状态键</summary>
     private static string GetExtensionKey(FileCategory category, string extension) => $"{category}|{extension}";
 
+    private static string GetExtensionGroup(string extension) =>
+        string.IsNullOrWhiteSpace(extension) ? "[无扩展名]" : extension.ToUpperInvariant();
+
+    private static string NormalizeSourcePath(string path) =>
+        path.Trim().Replace('/', '\\').TrimEnd('\\');
+
     /// <summary>判断文件是否属于界面显示的扩展名分组，兼容无扩展名文件</summary>
     private static bool BelongsToExtensionGroup(FileItem file, string groupExtension) =>
         string.IsNullOrWhiteSpace(file.Extension)
@@ -672,9 +927,8 @@ public partial class FileExplorerViewModel(
     /// <summary>按当前状态反选或明确设置指定文件集合的选择状态</summary>
     private void SetSelection(IEnumerable<FileItem> files, bool? selected = null)
     {
-        var fileList = files.ToList();
-        var shouldSelect = selected ?? !fileList.All(file => _selectedPaths.Contains(file.FullPath));
-        foreach (var file in fileList)
+        var shouldSelect = selected ?? files.Any(file => !_selectedPaths.Contains(file.FullPath));
+        foreach (var file in files)
         {
             if (shouldSelect)
             {

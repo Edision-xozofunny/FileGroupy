@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FileGroupy.Models;
 using FileGroupy.ViewModels;
 
 namespace FileGroupy.Views;
@@ -13,6 +14,10 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
     private System.Windows.Point? _selectionOrigin;
     /// <summary>当前右键菜单关联的文件行，供菜单点击后稳定传递命令参数。</summary>
     private ExplorerRow? _contextMenuRow;
+    /// <summary>当前鼠标悬停的表格行，避免重复解码同一张图片。</summary>
+    private ExplorerRow? _hoverPreviewRow;
+    /// <summary>图片悬停预览的取消源，移动鼠标或离开表格时终止后台加载。</summary>
+    private CancellationTokenSource? _hoverPreviewCancellationTokenSource;
 
     /// <summary>初始化文件浏览页面及其 XAML 组件</summary>
     public FileExplorerView() => InitializeComponent();
@@ -107,6 +112,80 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         SelectionBox.Visibility = Visibility.Collapsed;
     }
 
+    /// <summary>悬停图片文件行时显示缩略图浮层，离开后自动销毁。</summary>
+    /// <param name="sender">触发事件的文件表格。</param>
+    /// <param name="e">鼠标移动事件参数。</param>
+    private async void FilesGrid_OnMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton == MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var row = FindAncestor<DataGridRow>(e.OriginalSource as DependencyObject)?.Item as ExplorerRow;
+        if (row?.File is null || row.File.Category != FileCategory.Images)
+        {
+            HideImageHoverPopup();
+            return;
+        }
+
+        if (_hoverPreviewRow?.File?.FullPath == row.File.FullPath)
+        {
+            ImageHoverPopup.HorizontalOffset = e.GetPosition(FilesGrid).X + 24;
+            ImageHoverPopup.VerticalOffset = e.GetPosition(FilesGrid).Y + 18;
+            return;
+        }
+
+        _hoverPreviewCancellationTokenSource?.Cancel();
+        _hoverPreviewCancellationTokenSource?.Dispose();
+        _hoverPreviewCancellationTokenSource = new CancellationTokenSource();
+        var token = _hoverPreviewCancellationTokenSource.Token;
+        _hoverPreviewRow = row;
+
+        try
+        {
+            if (DataContext is not FileExplorerViewModel viewModel)
+            {
+                return;
+            }
+
+            var preview = await viewModel.CreateImageHoverPreviewAsync(row, token);
+            if (preview is null || token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            ImageHoverPreviewImage.Source = preview.ImageSource;
+            ImageHoverCorruptedText.Visibility = preview.IsCorrupted ? Visibility.Visible : Visibility.Collapsed;
+            ImageHoverResolutionText.Text = $"分辨率: {preview.Resolution}";
+            ImageHoverSizeText.Text = $"大小: {preview.SizeText}";
+            ImageHoverTypeText.Text = $"类型: {preview.TypeText}";
+            ImageHoverPopup.HorizontalOffset = e.GetPosition(FilesGrid).X + 24;
+            ImageHoverPopup.VerticalOffset = e.GetPosition(FilesGrid).Y + 18;
+            ImageHoverPopup.IsOpen = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // 鼠标移动频繁会取消旧请求，忽略即可。
+        }
+    }
+
+    /// <summary>鼠标离开文件表格后关闭图片浮层并释放加载任务。</summary>
+    /// <param name="sender">触发事件的文件表格。</param>
+    /// <param name="e">鼠标事件参数。</param>
+    private void FilesGrid_OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => HideImageHoverPopup();
+
+    /// <summary>关闭图片悬停浮层并清理缓存引用。</summary>
+    private void HideImageHoverPopup()
+    {
+        _hoverPreviewCancellationTokenSource?.Cancel();
+        _hoverPreviewCancellationTokenSource?.Dispose();
+        _hoverPreviewCancellationTokenSource = null;
+        _hoverPreviewRow = null;
+        ImageHoverPopup.IsOpen = false;
+        ImageHoverPreviewImage.Source = null;
+    }
+
     private void SearchButton_OnClick(object sender, RoutedEventArgs e)
     {
         SearchBox.Focus();
@@ -133,6 +212,7 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         {
             _contextMenuRow = row;
             FilesGrid.SelectedItem = row;
+            viewModel.EnsureContextRowSelected(row);
             OpenMenuItem.IsEnabled = viewModel.OpenFileCommand.CanExecute(row);
             OpenWithMenuItem.IsEnabled = viewModel.OpenWithFileCommand.CanExecute(row);
             OpenLocationMenuItem.IsEnabled = viewModel.OpenFileLocationCommand.CanExecute(row);

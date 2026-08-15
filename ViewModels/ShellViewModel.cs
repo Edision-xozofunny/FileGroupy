@@ -26,6 +26,7 @@ public partial class ShellViewModel : ObservableObject
         _currentViewModel = Dashboard;
         Dashboard.ScanCompleted += (_, result) => Explorer.Load(result);
         Dashboard.ScanCancelled += (_, _) => Explorer.Clear();
+        Explorer.FilesChanged += (_, result) => Dashboard.ApplyExplorerSnapshot(result);
         Dashboard.CategoryRequested += (_, category) =>
         {
             Explorer.ShowCategory(category);
