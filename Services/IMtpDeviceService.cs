@@ -58,18 +58,18 @@ public interface IMtpDeviceService
         IProgress<FileTransferProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>批量删除同一设备上的文件，并返回成功与失败明细。</summary>
-    /// <param name="sourceFiles">待删除的设备文件集合。</param>
-    /// <param name="progress">可选的删除进度接收器。</param>
-    /// <param name="cancellationToken">用于中止尚未完成删除的取消标记。</param>
-    /// <returns>删除结果汇总。</returns>
+    /// <summary>批量删除同一设备上的文件，并返回成功与失败明细</summary>
+    /// <param name="sourceFiles">待删除的设备文件集合</param>
+    /// <param name="progress">可选的删除进度接收器</param>
+    /// <param name="cancellationToken">用于中止尚未完成删除的取消标记</param>
+    /// <returns>删除结果汇总</returns>
     Task<FileTransferResult> DeleteFilesAsync(
         IReadOnlyCollection<FileItem> sourceFiles,
         IProgress<FileTransferProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>按设备标识清理扫描缓存，供删除和跨目录写入后强制刷新。</summary>
-    /// <param name="deviceId">需要清理缓存的设备标识。</param>
+    /// <summary>按设备标识清理扫描缓存，供删除和跨目录写入后强制刷新</summary>
+    /// <param name="deviceId">需要清理缓存的设备标识</param>
     void InvalidateScanCache(string deviceId);
 
     /// <summary>将手机文件下载至应用临时预览目录，并返回本地可读取路径</summary>

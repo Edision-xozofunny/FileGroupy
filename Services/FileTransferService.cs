@@ -145,9 +145,9 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         var successfulSourcePaths = new List<string>();
         var successfulTransfers = new List<FileTransferSuccess>();
 
-        /// <summary>将分批删除结果汇总到统一统计，并上报聚合进度。</summary>
-        /// <param name="result">单批删除结果。</param>
-        /// <param name="batchFiles">该批次实际处理的源文件集合。</param>
+        /// <summary>将分批删除结果汇总到统一统计，并上报聚合进度</summary>
+        /// <param name="result">单批删除结果</param>
+        /// <param name="batchFiles">该批次实际处理的源文件集合</param>
         void MergeResult(FileTransferResult result, IReadOnlyCollection<FileItem> batchFiles)
         {
             succeeded += result.Succeeded;
@@ -175,10 +175,10 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         return new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths, successfulTransfers);
     }
 
-    /// <summary>批量删除本地文件并记录成功与失败明细。</summary>
-    /// <param name="sourceFiles">待删除本地文件集合。</param>
-    /// <param name="cancellationToken">用于终止批量删除的取消标记。</param>
-    /// <returns>本地删除结果。</returns>
+    /// <summary>批量删除本地文件并记录成功与失败明细</summary>
+    /// <param name="sourceFiles">待删除本地文件集合</param>
+    /// <param name="cancellationToken">用于终止批量删除的取消标记</param>
+    /// <returns>本地删除结果</returns>
     private static Task<FileTransferResult> DeleteLocalAsync(IReadOnlyCollection<FileItem> sourceFiles, CancellationToken cancellationToken)
     {
         var succeeded = 0;
@@ -339,7 +339,7 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         await source.CopyToAsync(destination, BufferSize, cancellationToken);
     }
 
-    /// <summary>移动任务仅在源文件已实际删除后才可被报告为成功。</summary>
+    /// <summary>移动任务仅在源文件已实际删除后才可被报告为成功</summary>
     private static void EnsureLocalSourceWasMoved(string sourcePath)
     {
         if (File.Exists(sourcePath))

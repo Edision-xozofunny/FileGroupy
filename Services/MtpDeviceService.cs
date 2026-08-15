@@ -36,7 +36,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
                     try
                     {
                         // iPhone 在 Windows 中通常通过 Apple Mobile Device 驱动以 PTP 设备出现，
-                        // 设备类型可能被报告为 Camera、MediaPlayer 或 Generic。
+                        // 设备类型可能被报告为 Camera、MediaPlayer 或 Generic
                         var protocol = ResolvePortableProtocol(device);
                         if (protocol is null)
                         {
@@ -44,7 +44,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
                         }
 
                         // 仅验证可访问根目录，不再要求根目录下必须可枚举到子项，
-                        // 避免 iPhone/PTP 设备因目录结构差异被误判为不可用。
+                        // 避免 iPhone/PTP 设备因目录结构差异被误判为不可用
                         _ = device.GetRootDirectory();
 
                         devices.Add(new MtpDeviceInfo(device.DeviceId, device.FriendlyName, device.Manufacturer, protocol.Value));
@@ -480,11 +480,11 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>在同一设备会话中顺序删除文件，并返回可用于刷新界面的成功与失败明细。</summary>
-    /// <param name="sourceFiles">待删除的 MTP 文件集合。</param>
-    /// <param name="progress">可选的删除进度接收器。</param>
-    /// <param name="cancellationToken">用于中止删除任务的取消标记。</param>
-    /// <returns>删除结果。</returns>
+    /// <summary>在同一设备会话中顺序删除文件，并返回可用于刷新界面的成功与失败明细</summary>
+    /// <param name="sourceFiles">待删除的 MTP 文件集合</param>
+    /// <param name="progress">可选的删除进度接收器</param>
+    /// <param name="cancellationToken">用于中止删除任务的取消标记</param>
+    /// <returns>删除结果</returns>
     private static FileTransferResult DeleteFiles(
         IReadOnlyCollection<FileItem> sourceFiles,
         IProgress<FileTransferProgress>? progress,
@@ -562,9 +562,9 @@ public sealed class MtpDeviceService : IMtpDeviceService
     private static void ReportProgress(IProgress<FileScanProgress>? progress, int folders, int files, long bytes, IReadOnlyDictionary<FileCategory, CategoryScanSummary> categories) =>
         progress?.Report(new FileScanProgress(folders, files, bytes, new Dictionary<FileCategory, CategoryScanSummary>(categories)));
 
-    /// <summary>根据 WPD 设备信息推断 MTP 或 PTP 协议，兼容 iPhone 等被识别为 Generic 或 MediaPlayer 的设备。</summary>
-    /// <param name="device">已建立连接的便携设备实例。</param>
-    /// <returns>可支持的协议类型；未知类型返回 <see langword="null"/>。</returns>
+    /// <summary>根据 WPD 设备信息推断 MTP 或 PTP 协议，兼容 iPhone 等被识别为 Generic 或 MediaPlayer 的设备</summary>
+    /// <param name="device">已建立连接的便携设备实例</param>
+    /// <returns>可支持的协议类型；未知类型返回 <see langword="null"/></returns>
     private static PortableDeviceProtocol? ResolvePortableProtocol(MediaDevice device)
     {
         if (device.DeviceType == DeviceType.Phone)
@@ -772,7 +772,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         device.CreateDirectory(directoryPath);
     }
 
-    /// <summary>移动设备文件后确认源对象已消失，避免将仍存在的文件从列表中过早移除。</summary>
+    /// <summary>移动设备文件后确认源对象已消失，避免将仍存在的文件从列表中过早移除</summary>
     private static void EnsureMtpSourceWasMoved(MediaDevice device, string sourcePath)
     {
         if (device.FileExists(sourcePath))
@@ -781,7 +781,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>移动本地文件后确认源文件已删除，避免将失效状态报告为成功。</summary>
+    /// <summary>移动本地文件后确认源文件已删除，避免将失效状态报告为成功</summary>
     private static void EnsureLocalSourceWasMoved(string sourcePath)
     {
         if (File.Exists(sourcePath))

@@ -19,7 +19,7 @@
             <TextBlock Text="{Binding SourceHint}" Margin="0,10,0,0" Foreground="#B54708" TextWrapping="Wrap" />
         </StackPanel>
         <Border Grid.Row="1" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,20,0,16">
-            <TextBlock Text="将尝试删除所选中的全部文件。再次点击“开始删除”时，已被移动或删除的文件会记录为失败，可在“查看失败详情”中查看。" TextWrapping="Wrap" Foreground="#475467" />
+            <TextBlock Text="将尝试删除所选中的全部文件再次点击“开始删除”时，已被移动或删除的文件会记录为失败，可在“查看失败详情”中查看" TextWrapping="Wrap" Foreground="#475467" />
         </Border>
         <ProgressBar Grid.Row="2" Height="12" Maximum="100" Value="{Binding ProgressPercent}" Margin="0,2,0,10" />
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,20">

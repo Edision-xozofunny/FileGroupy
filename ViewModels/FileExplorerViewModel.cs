@@ -32,13 +32,13 @@ public partial class FileExplorerViewModel(
     private CancellationTokenSource? _searchCancellationTokenSource;
     /// <summary>树批量操作版本，用于丢弃较早异步操作的过期结果</summary>
     private int _treeOperationVersion;
-    /// <summary>最近一次扫描结果的展示路径，用于操作后回写概览统计。</summary>
+    /// <summary>最近一次扫描结果的展示路径，用于操作后回写概览统计</summary>
     private string _currentScanPath = string.Empty;
-    /// <summary>最近一次扫描结果中的目录数量，用于维持概览页统计结构一致。</summary>
+    /// <summary>最近一次扫描结果中的目录数量，用于维持概览页统计结构一致</summary>
     private int _currentFolderCount;
-    /// <summary>最近一次扫描结果中的跳过项数量，用于维持概览页文案。</summary>
+    /// <summary>最近一次扫描结果中的跳过项数量，用于维持概览页文案</summary>
     private int _currentSkippedItemCount;
-    /// <summary>当前结果是否来自本地目录扫描，用于判定复制或移动后是否可补充新增节点。</summary>
+    /// <summary>当前结果是否来自本地目录扫描，用于判定复制或移动后是否可补充新增节点</summary>
     private bool _isLocalScan;
 
     /// <summary>绑定到表格的根行和文件子行集合</summary>
@@ -61,7 +61,7 @@ public partial class FileExplorerViewModel(
     /// <summary>由工具生成的文件模糊检索关键字公开绑定属性</summary>
     [ObservableProperty] private string _searchQuery = string.Empty;
 
-    /// <summary>文件集合发生增删改后触发，供概览页和分类卡片同步刷新。</summary>
+    /// <summary>文件集合发生增删改后触发，供概览页和分类卡片同步刷新</summary>
     public event EventHandler<FolderScanResult>? FilesChanged;
 
     /// <summary>接收新扫描结果，清除筛选并显示全部分类</summary>
@@ -232,7 +232,7 @@ public partial class FileExplorerViewModel(
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task MoveSelectedAsync() => await ShowTransferDialogAsync(true);
 
-    /// <summary>打开删除对话框，执行批量删除并同步刷新树节点和概览统计。</summary>
+    /// <summary>打开删除对话框，执行批量删除并同步刷新树节点和概览统计</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task DeleteSelectedAsync() => await ShowDeleteDialogAsync();
 
@@ -279,7 +279,7 @@ public partial class FileExplorerViewModel(
         }
     }
 
-    /// <summary>在 Windows 文件资源管理器中选中本地源文件。</summary>
+    /// <summary>在 Windows 文件资源管理器中选中本地源文件</summary>
     [RelayCommand(CanExecute = nameof(CanOpenLocalFile))]
     private async Task OpenFileLocationAsync(ExplorerRow? row)
     {
@@ -301,8 +301,8 @@ public partial class FileExplorerViewModel(
     private static bool CanOpenLocalFile(ExplorerRow? row) =>
         row?.File?.SourceKind == StorageSourceKind.LocalFileSystem;
 
-    /// <summary>确保右键行至少被加入当前选择集合，便于单文件直接执行复制、移动或删除。</summary>
-    /// <param name="row">右键命中的表格行。</param>
+    /// <summary>确保右键行至少被加入当前选择集合，便于单文件直接执行复制、移动或删除</summary>
+    /// <param name="row">右键命中的表格行</param>
     public void EnsureContextRowSelected(ExplorerRow row)
     {
         if (row.File is null)
@@ -319,10 +319,10 @@ public partial class FileExplorerViewModel(
         SynchronizeVisibleSelection();
     }
 
-    /// <summary>为图片文件构建悬停预览数据；无法解码时返回损坏提示。</summary>
-    /// <param name="row">当前鼠标所在表格行。</param>
-    /// <param name="cancellationToken">用于取消预览加载的标记。</param>
-    /// <returns>图片悬停预览数据；非图片行返回 <see langword="null"/>。</returns>
+    /// <summary>为图片文件构建悬停预览数据；无法解码时返回损坏提示</summary>
+    /// <param name="row">当前鼠标所在表格行</param>
+    /// <param name="cancellationToken">用于取消预览加载的标记</param>
+    /// <returns>图片悬停预览数据；非图片行返回 <see langword="null"/></returns>
     public async Task<ImageHoverPreview?> CreateImageHoverPreviewAsync(ExplorerRow row, CancellationToken cancellationToken = default)
     {
         if (row.File is null || row.File.Category != FileCategory.Images)
@@ -358,9 +358,9 @@ public partial class FileExplorerViewModel(
         }
     }
 
-    /// <summary>打开复制或移动对话框，并在完成后刷新树数据、缓存与提示信息。</summary>
-    /// <param name="moveFiles">是否以移动模式执行。</param>
-    /// <returns>异步任务。</returns>
+    /// <summary>打开复制或移动对话框，并在完成后刷新树数据、缓存与提示信息</summary>
+    /// <param name="moveFiles">是否以移动模式执行</param>
+    /// <returns>异步任务</returns>
     private async Task ShowTransferDialogAsync(bool moveFiles)
     {
         var selectedFiles = _files.Where(file => _selectedPaths.Contains(file.FullPath)).ToList();
@@ -393,8 +393,8 @@ public partial class FileExplorerViewModel(
         await Task.CompletedTask;
     }
 
-    /// <summary>打开删除对话框并在完成后同步树节点、缓存和结果提示。</summary>
-    /// <returns>异步任务。</returns>
+    /// <summary>打开删除对话框并在完成后同步树节点、缓存和结果提示</summary>
+    /// <returns>异步任务</returns>
     private async Task ShowDeleteDialogAsync()
     {
         var selectedFiles = _files.Where(file => _selectedPaths.Contains(file.FullPath)).ToList();
@@ -424,9 +424,9 @@ public partial class FileExplorerViewModel(
         await Task.CompletedTask;
     }
 
-    /// <summary>根据复制或移动结果更新树节点，并广播统计刷新事件。</summary>
-    /// <param name="moveFiles">是否为移动模式。</param>
-    /// <param name="result">操作结果。</param>
+    /// <summary>根据复制或移动结果更新树节点，并广播统计刷新事件</summary>
+    /// <param name="moveFiles">是否为移动模式</param>
+    /// <param name="result">操作结果</param>
     private void ApplyTransferResult(bool moveFiles, FileTransferResult result)
     {
         if (moveFiles)
@@ -444,11 +444,11 @@ public partial class FileExplorerViewModel(
         NotifyFilesChanged();
     }
 
-    /// <summary>显示复制、移动或删除的结果提示，便于用户确认任务是否完成。</summary>
-    /// <param name="operationName">操作名称。</param>
-    /// <param name="succeeded">成功数量。</param>
-    /// <param name="skipped">跳过数量。</param>
-    /// <param name="failed">失败数量。</param>
+    /// <summary>显示复制、移动或删除的结果提示，便于用户确认任务是否完成</summary>
+    /// <param name="operationName">操作名称</param>
+    /// <param name="succeeded">成功数量</param>
+    /// <param name="skipped">跳过数量</param>
+    /// <param name="failed">失败数量</param>
     private static void ShowOperationResultMessage(string operationName, int succeeded, int skipped, int failed)
     {
         var message = $"{operationName}完成：成功 {succeeded:N0}，跳过 {skipped:N0}，失败 {failed:N0}";
@@ -460,8 +460,8 @@ public partial class FileExplorerViewModel(
             failed == 0 ? System.Windows.MessageBoxImage.Information : System.Windows.MessageBoxImage.Warning);
     }
 
-    /// <summary>按成功源路径集合删除当前树中的文件项，并同步选择与搜索状态。</summary>
-    /// <param name="sourcePaths">需要移除的源路径集合。</param>
+    /// <summary>按成功源路径集合删除当前树中的文件项，并同步选择与搜索状态</summary>
+    /// <param name="sourcePaths">需要移除的源路径集合</param>
     private void RemoveFilesBySourcePaths(IEnumerable<string> sourcePaths)
     {
         var removedPathSet = sourcePaths.Select(NormalizeSourcePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -475,8 +475,8 @@ public partial class FileExplorerViewModel(
         _searchMatchedPaths?.RemoveWhere(path => removedPathSet.Contains(NormalizeSourcePath(path)));
     }
 
-    /// <summary>将目标落在当前本地扫描范围内的新文件补充到树数据中。</summary>
-    /// <param name="successfulTransfers">成功传输的源目标映射集合。</param>
+    /// <summary>将目标落在当前本地扫描范围内的新文件补充到树数据中</summary>
+    /// <param name="successfulTransfers">成功传输的源目标映射集合</param>
     private void AddLocalDestinationFiles(IReadOnlyList<FileTransferSuccess> successfulTransfers)
     {
         if (!_isLocalScan || string.IsNullOrWhiteSpace(_currentScanPath))
@@ -509,7 +509,7 @@ public partial class FileExplorerViewModel(
         }
     }
 
-    /// <summary>通知概览页使用当前树数据重新计算卡片、统计和筛选结果。</summary>
+    /// <summary>通知概览页使用当前树数据重新计算卡片、统计和筛选结果</summary>
     private void NotifyFilesChanged()
     {
         if (string.IsNullOrWhiteSpace(_currentScanPath))
@@ -552,7 +552,7 @@ public partial class FileExplorerViewModel(
         }
         catch (OperationCanceledException)
         {
-            // 新关键字会取消旧任务，旧结果不能覆盖当前列表。
+            // 新关键字会取消旧任务，旧结果不能覆盖当前列表
         }
     }
 
@@ -691,7 +691,7 @@ public partial class FileExplorerViewModel(
         SynchronizeVisibleSelection();
     }
 
-    /// <summary>构建当前树行数据；万级数据时改为异步分批写入以降低主线程卡顿。</summary>
+    /// <summary>构建当前树行数据；万级数据时改为异步分批写入以降低主线程卡顿</summary>
     private void BuildRows()
     {
         var operationVersion = ++_treeOperationVersion;

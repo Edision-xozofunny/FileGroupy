@@ -43,7 +43,7 @@ public sealed record FileTransferFailure(
 /// <param name="Skipped">因目标冲突或源目标相同而跳过的文件数</param>
 /// <param name="Failures">每个失败文件的可查看和可导出诊断信息</param>
 /// <param name="SuccessfulSourcePaths">实际完成传输的源文件路径，用于移动后同步列表</param>
-/// <param name="SuccessfulTransfers">实际完成的源路径与目标路径映射，用于刷新树节点。</param>
+/// <param name="SuccessfulTransfers">实际完成的源路径与目标路径映射，用于刷新树节点</param>
 public sealed record FileTransferResult(
     int Succeeded,
     int Skipped,
@@ -51,7 +51,7 @@ public sealed record FileTransferResult(
     IReadOnlyList<string> SuccessfulSourcePaths,
     IReadOnlyList<FileTransferSuccess>? SuccessfulTransfers = null);
 
-/// <summary>记录单个成功文件操作的源路径与目标路径，删除场景目标路径为空。</summary>
-/// <param name="SourcePath">源文件路径。</param>
-/// <param name="DestinationPath">目标文件路径，删除时为空字符串。</param>
+/// <summary>记录单个成功文件操作的源路径与目标路径，删除场景目标路径为空</summary>
+/// <param name="SourcePath">源文件路径</param>
+/// <param name="DestinationPath">目标文件路径，删除时为空字符串</param>
 public sealed record FileTransferSuccess(string SourcePath, string DestinationPath);

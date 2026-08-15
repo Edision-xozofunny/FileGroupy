@@ -37,7 +37,7 @@ public partial class ExplorerRow : ObservableObject, IStickyDataGridRow
     public string Name { get; init; } = string.Empty;
     /// <summary>文件扩展名；分类根行为空</summary>
     public string Extension { get; init; } = string.Empty;
-    /// <summary>供表格显示的类型说明；保留 <see cref="Extension"/> 的原始扩展名语义。</summary>
+    /// <summary>供表格显示的类型说明；保留 <see cref="Extension"/> 的原始扩展名语义</summary>
     public string TypeDisplayName => FileCategoryCatalog.GetDisplayName(Extension);
     /// <summary>文件完整路径；分类根行为空</summary>
     public string Location { get; init; } = string.Empty;
@@ -53,10 +53,10 @@ public partial class ExplorerRow : ObservableObject, IStickyDataGridRow
     public FileItem? File { get; init; }
     /// <summary>指示当前行是否为可展开或可全选的分组节点</summary>
     public bool IsGroup => IsCategory || IsExtensionGroup;
-    /// <summary>分组行在滚动时作为当前分组标题固定在表头下方。</summary>
+    /// <summary>分组行在滚动时作为当前分组标题固定在表头下方</summary>
     public bool IsStickyRow => IsCategory || IsExtensionGroup;
 
-    /// <summary>固定分组层级，分类为 0，扩展名分组为 1，文件行为最大层级。</summary>
+    /// <summary>固定分组层级，分类为 0，扩展名分组为 1，文件行为最大层级</summary>
     public int StickyLevel => IsCategory ? 0 : IsExtensionGroup ? 1 : int.MaxValue;
     /// <summary>指示当前行是否允许通过复选框参与批量操作</summary>
     public bool IsSelectable => true;
@@ -72,12 +72,12 @@ public partial class ExplorerRow : ObservableObject, IStickyDataGridRow
             : $"└─ {Name}";
 }
 
-/// <summary>鼠标悬停图片行时显示的轻量预览数据。</summary>
-/// <param name="ImageSource">可显示的缩略图；损坏或不可读时为空。</param>
-/// <param name="Resolution">分辨率文本，例如 1920 × 1080。</param>
-/// <param name="SizeText">文件大小文本。</param>
-/// <param name="TypeText">扩展名文本。</param>
-/// <param name="IsCorrupted">是否为损坏或不可解码的图片。</param>
+/// <summary>鼠标悬停图片行时显示的轻量预览数据</summary>
+/// <param name="ImageSource">可显示的缩略图；损坏或不可读时为空</param>
+/// <param name="Resolution">分辨率文本，例如 1920 × 1080</param>
+/// <param name="SizeText">文件大小文本</param>
+/// <param name="TypeText">扩展名文本</param>
+/// <param name="IsCorrupted">是否为损坏或不可解码的图片</param>
 public sealed record ImageHoverPreview(
     ImageSource? ImageSource,
     string Resolution,

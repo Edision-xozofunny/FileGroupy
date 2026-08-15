@@ -12,11 +12,11 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
 {
     /// <summary>开始拖拽框选时相对于表格的鼠标坐标；为空表示未框选</summary>
     private System.Windows.Point? _selectionOrigin;
-    /// <summary>当前右键菜单关联的文件行，供菜单点击后稳定传递命令参数。</summary>
+    /// <summary>当前右键菜单关联的文件行，供菜单点击后稳定传递命令参数</summary>
     private ExplorerRow? _contextMenuRow;
-    /// <summary>当前鼠标悬停的表格行，避免重复解码同一张图片。</summary>
+    /// <summary>当前鼠标悬停的表格行，避免重复解码同一张图片</summary>
     private ExplorerRow? _hoverPreviewRow;
-    /// <summary>图片悬停预览的取消源，移动鼠标或离开表格时终止后台加载。</summary>
+    /// <summary>图片悬停预览的取消源，移动鼠标或离开表格时终止后台加载</summary>
     private CancellationTokenSource? _hoverPreviewCancellationTokenSource;
 
     /// <summary>初始化文件浏览页面及其 XAML 组件</summary>
@@ -112,9 +112,9 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         SelectionBox.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>悬停图片文件行时显示缩略图浮层，离开后自动销毁。</summary>
-    /// <param name="sender">触发事件的文件表格。</param>
-    /// <param name="e">鼠标移动事件参数。</param>
+    /// <summary>悬停图片文件行时显示缩略图浮层，离开后自动销毁</summary>
+    /// <param name="sender">触发事件的文件表格</param>
+    /// <param name="e">鼠标移动事件参数</param>
     private async void FilesGrid_OnMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
         if (e.LeftButton == MouseButtonState.Pressed)
@@ -166,16 +166,16 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         }
         catch (OperationCanceledException)
         {
-            // 鼠标移动频繁会取消旧请求，忽略即可。
+            // 鼠标移动频繁会取消旧请求，忽略即可
         }
     }
 
-    /// <summary>鼠标离开文件表格后关闭图片浮层并释放加载任务。</summary>
-    /// <param name="sender">触发事件的文件表格。</param>
-    /// <param name="e">鼠标事件参数。</param>
+    /// <summary>鼠标离开文件表格后关闭图片浮层并释放加载任务</summary>
+    /// <param name="sender">触发事件的文件表格</param>
+    /// <param name="e">鼠标事件参数</param>
     private void FilesGrid_OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => HideImageHoverPopup();
 
-    /// <summary>关闭图片悬停浮层并清理缓存引用。</summary>
+    /// <summary>关闭图片悬停浮层并清理缓存引用</summary>
     private void HideImageHoverPopup()
     {
         _hoverPreviewCancellationTokenSource?.Cancel();

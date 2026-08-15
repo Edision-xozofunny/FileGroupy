@@ -51,7 +51,7 @@ public partial class FileTransferDialogViewModel : ObservableObject
     public string SourceHint { get; }
     /// <summary>移动操作中已实际完成的源路径，供关闭对话框后的列表同步使用</summary>
     public IReadOnlyList<string> MovedSourcePaths { get; private set; } = [];
-    /// <summary>最近一次执行结果，供调用方刷新树节点和统计信息。</summary>
+    /// <summary>最近一次执行结果，供调用方刷新树节点和统计信息</summary>
     public FileTransferResult? LastResult { get; private set; }
 
     /// <summary>由工具生成的目标目录公开绑定属性</summary>
@@ -151,10 +151,10 @@ public partial class FileTransferDialogViewModel : ObservableObject
             ShowFailuresCommand.NotifyCanExecuteChanged();
 
             // iPhone 等 PTP 设备通常不支持从电脑回写文件，
-            // 仅支持从设备复制到本地或在设备侧删除。
+            // 仅支持从设备复制到本地或在设备侧删除
             if (DestinationMtpDevice?.Protocol == PortableDeviceProtocol.Ptp && _sourceFiles.All(file => file.SourceKind == StorageSourceKind.LocalFileSystem))
             {
-                throw new NotSupportedException("当前 PTP 设备通常不支持从电脑写入文件。请先从设备复制到本地，或在设备侧执行删除。\n若需写入，请改用支持 MTP 写入的设备。");
+                throw new NotSupportedException("当前 PTP 设备通常不支持从电脑写入文件请先从设备复制到本地，或在设备侧执行删除\n若需写入，请改用支持 MTP 写入的设备");
             }
 
             var result = await _transferService.TransferAsync(_sourceFiles,

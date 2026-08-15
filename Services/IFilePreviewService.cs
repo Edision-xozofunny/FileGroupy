@@ -26,7 +26,7 @@ public interface IFilePreviewService
     /// <param name="cancellationToken">用于取消 MTP 临时下载的标记</param>
     Task OpenWithApplicationAsync(FileItem file, CancellationToken cancellationToken = default);
 
-    /// <summary>在 Windows 文件资源管理器中定位本地源文件。</summary>
+    /// <summary>在 Windows 文件资源管理器中定位本地源文件</summary>
     /// <param name="file">需要定位的本地文件</param>
     Task OpenFileLocationAsync(FileItem file, CancellationToken cancellationToken = default);
 }

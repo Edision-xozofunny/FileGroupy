@@ -89,7 +89,7 @@ public sealed class FilePreviewService(IMtpDeviceService mtpDeviceService) : IFi
     private static void OpenWithDefaultApplication(string path) =>
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
 
-    /// <summary>启动 Windows 的 OpenWith 宿主，显示资源管理器式的应用选择窗口。</summary>
+    /// <summary>启动 Windows 的 OpenWith 宿主，显示资源管理器式的应用选择窗口</summary>
     private static void OpenWithApplication(string path)
     {
         var openWithPath = Path.Combine(Environment.SystemDirectory, "OpenWith.exe");
