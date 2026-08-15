@@ -17,17 +17,18 @@
 
       <Border Background="{StaticResource SurfaceBrush}" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="26">
         <Grid>
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
           <StackPanel>
             <TextBlock Text="扫描来源" Foreground="#667085" FontSize="12" FontWeight="SemiBold" />
             <TextBlock Text="{Binding SelectedPath}" FontSize="16" Margin="0,5,0,0" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
             <TextBlock Text="{Binding FolderInfo}" Margin="0,8,0,0" Foreground="{StaticResource TextSecondaryBrush}" />
             <TextBlock Text="{Binding ErrorMessage}" Margin="0,8,0,0" Foreground="#D92D20" />
           </StackPanel>
-          <Button Grid.Column="1" Command="{Binding ChooseMtpDeviceCommand}" Background="#EAF2FF" Foreground="#1D4ED8" Padding="18,11" Margin="18,0,0,0">
+          <Button Grid.Column="1" Command="{Binding RefreshCurrentCommand}" Content="刷新" Background="#F2F4F7" Foreground="#344054" Padding="18,11" Margin="18,0,0,0" />
+          <Button Grid.Column="2" Command="{Binding ChooseMtpDeviceCommand}" Background="#EAF2FF" Foreground="#1D4ED8" Padding="18,11" Margin="10,0,0,0">
             <TextBlock Text="选择便携设备" FontWeight="SemiBold" />
           </Button>
-          <Button Grid.Column="2" Command="{Binding ChooseFolderCommand}" Background="#2563EB" Foreground="White" Padding="18,11" Margin="10,0,0,0">
+          <Button Grid.Column="3" Command="{Binding ChooseFolderCommand}" Background="#2563EB" Foreground="White" Padding="18,11" Margin="10,0,0,0">
             <TextBlock Text="选择文件夹" FontWeight="SemiBold" />
           </Button>
         </Grid>

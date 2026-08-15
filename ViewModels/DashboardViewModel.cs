@@ -8,47 +8,39 @@ using FileGroupy.Views;
 
 namespace FileGroupy.ViewModels;
 
-/// <summary>概览页视图模型，负责选择目录、启动扫描并生成分类卡片</summary>
-/// <param name="scanner">通过依赖注入提供的目录扫描服务</param>
+/// <summary>概览页视图模型, 负责选择来源, 扫描文件并生成分类卡片</summary>
 public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceService mtpDeviceService) : ObservableObject
 {
-    /// <summary>当前扫描使用的取消源；空值表示没有正在执行的扫描</summary>
+    /// <summary>当前扫描使用的取消源, 空值表示没有正在执行的扫描</summary>
     private CancellationTokenSource? _scanCancellationTokenSource;
-    /// <summary>递增的扫描会话编号，用于丢弃已取消扫描排队到 UI 线程的旧进度</summary>
+    /// <summary>最近一次扫描委托, 用于刷新当前来源</summary>
+    private Func<IProgress<FileScanProgress>, CancellationToken, Task<FolderScanResult>>? _lastScan;
+    /// <summary>最近一次扫描的显示路径</summary>
+    private string _lastScanPath = string.Empty;
+    /// <summary>用于丢弃已取消扫描产生的旧进度</summary>
     private int _scanSessionId;
 
     /// <summary>扫描完成后显示在概览页的分类统计卡片集合</summary>
     public ObservableCollection<CategorySummary> Categories { get; } = [];
 
-    /// <summary>由工具生成的当前已选目录路径公开绑定属性</summary>
+    /// <summary>当前扫描来源的显示路径</summary>
     [ObservableProperty] private string _selectedPath = "尚未选择文件夹";
-    /// <summary>由工具生成的目录基础统计信息公开绑定属性</summary>
+    /// <summary>当前来源的基础统计信息</summary>
     [ObservableProperty] private string _folderInfo = "选择一个本地或可移动磁盘中的文件夹以开始分析";
-    /// <summary>由工具生成的扫描执行状态公开绑定属性</summary>
+    /// <summary>是否正在扫描</summary>
     [ObservableProperty] private bool _isScanning;
-    /// <summary>由工具生成的实时扫描统计公开绑定属性</summary>
+    /// <summary>实时扫描进度文本</summary>
     [ObservableProperty] private string _scanProgressText = string.Empty;
-    /// <summary>由工具生成的扫描失败提示公开绑定属性</summary>
+    /// <summary>扫描失败提示</summary>
     [ObservableProperty] private string? _errorMessage;
 
-    /// <summary>目录扫描成功后触发，使外层导航可更新文件浏览页</summary>
+    /// <summary>目录扫描成功后触发,使外层导航可更新文件浏览页</summary>
     public event EventHandler<FolderScanResult>? ScanCompleted;
-    /// <summary>用户取消扫描并清空界面状态后触发，使其他页面同步释放旧扫描结果</summary>
+    /// <summary>用户取消扫描并清空界面状态后触发</summary>
     public event EventHandler? ScanCancelled;
-    /// <summary>用户点击分类卡片时触发，通知外层导航切换至对应分类</summary>
+    /// <summary>用户点击分类卡片时触发</summary>
     public event EventHandler<FileCategory>? CategoryRequested;
 
-    /// <summary>显示文件夹选择对话框并异步扫描用户选定目录</summary>
-    /// <summary>请求打开指定分类的文件列表</summary>
-    /// <param name="category">用户点击的文件分类</param>
-    /// <summary>根据扫描结果重新计算并填充所有分类卡片</summary>
-    /// <param name="result">刚完成的目录扫描结果</param>
-    /// <summary>返回指定分类的中文显示名称</summary>
-    /// <param name="category">待转换的文件分类</param>
-    /// <returns>用于界面的中文名称</returns>
-    /// <summary>返回指定分类用于卡片展示的简短标识</summary>
-    /// <param name="category">待转换的文件分类</param>
-    /// <returns>用于界面的简短文本</returns>
     [RelayCommand(CanExecute = nameof(CanChooseFolder))]
     private async Task ChooseFolderAsync()
     {
@@ -67,7 +59,6 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         await StartScanAsync(dialog.SelectedPath, (progress, cancellationToken) => scanner.ScanAsync(dialog.SelectedPath, progress, cancellationToken));
     }
 
-    /// <summary>显示当前 Windows 已识别的 MTP/PTP 设备，并扫描用户选中的可访问目录</summary>
     [RelayCommand(CanExecute = nameof(CanChooseFolder))]
     private async Task ChooseMtpDeviceAsync()
     {
@@ -110,6 +101,8 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         string displayPath,
         Func<IProgress<FileScanProgress>, CancellationToken, Task<FolderScanResult>> scan)
     {
+        _lastScanPath = displayPath;
+        _lastScan = scan;
         IsScanning = true;
         ErrorMessage = null;
         SelectedPath = displayPath;
@@ -127,7 +120,6 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         }
         catch (OperationCanceledException)
         {
-            // 取消按钮已立即重置状态；此处仅接收后台任务结束信号
         }
         catch (Exception exception)
         {
@@ -141,38 +133,47 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         }
     }
 
-    /// <summary>请求取消当前扫描，扫描器会在下一个目录或条目检查点停止</summary>
+    /// <summary>请求取消当前扫描并立即清空界面状态</summary>
     [RelayCommand(CanExecute = nameof(IsScanning))]
     private void CancelScan()
     {
-        // 使已排队的旧进度回调失效，再立即释放界面和跨页面保存的扫描结果
         _scanSessionId++;
         _scanCancellationTokenSource?.Cancel();
         ClearScanState();
         ScanCancelled?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>决定是否允许打开新的目录选择对话框</summary>
+    /// <summary>使用最近一次扫描来源重新读取当前数据</summary>
+    [RelayCommand(CanExecute = nameof(CanRefresh))]
+    private async Task RefreshCurrentAsync()
+    {
+        if (_lastScan is not null)
+        {
+            await StartScanAsync(_lastScanPath, _lastScan);
+        }
+    }
+
     private bool CanChooseFolder() => !IsScanning;
+    private bool CanRefresh() => !IsScanning && _lastScan is not null;
 
     partial void OnIsScanningChanged(bool value)
     {
         CancelScanCommand.NotifyCanExecuteChanged();
         ChooseFolderCommand.NotifyCanExecuteChanged();
         ChooseMtpDeviceCommand.NotifyCanExecuteChanged();
+        RefreshCurrentCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
     private void OpenCategory(FileCategory category) => CategoryRequested?.Invoke(this, category);
 
-    /// <summary>接收文件浏览页的增删改结果并刷新概览卡片与统计信息</summary>
-    /// <param name="result">基于当前扫描路径的最新文件集合快照</param>
     public void ApplyExplorerSnapshot(FolderScanResult result)
     {
         SelectedPath = result.Path;
         Populate(result);
     }
 
+    /// <summary>根据扫描结果更新分类卡片和统计信息</summary>
     private void Populate(FolderScanResult result)
     {
         InitializeCategories();
@@ -188,9 +189,7 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
             : $"扫描部分完成：已跳过 {result.SkippedItemCount:N0} 个无法读取的目录或文件";
     }
 
-    /// <summary>接收后台服务节流后的扫描统计，仅更新固定数量的分类卡片以控制渲染开销</summary>
-    /// <param name="scanSessionId">产生该进度的扫描会话编号</param>
-    /// <param name="progress">当前已发现文件与分类汇总快照</param>
+    /// <summary>接收后台服务节流后的扫描统计</summary>
     private void UpdateScanProgress(int scanSessionId, FileScanProgress progress)
     {
         if (scanSessionId != _scanSessionId || !IsScanning)
@@ -207,7 +206,7 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         ScanProgressText = $"已扫描 {progress.FoldersScanned:N0} 个文件夹，发现 {progress.FilesDiscovered:N0} 个文件，{SizeFormatter.Format(progress.BytesDiscovered)}";
     }
 
-    /// <summary>清空取消扫描产生的所有概览数据，使界面恢复到初始状态</summary>
+    /// <summary>清空已取消扫描产生的概览数据</summary>
     private void ClearScanState()
     {
         Categories.Clear();
@@ -217,7 +216,7 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         ErrorMessage = null;
     }
 
-    /// <summary>初始化固定数量的分类卡片，使扫描开始后界面可立即呈现分类结构</summary>
+    /// <summary>初始化固定数量的分类卡片</summary>
     private void InitializeCategories()
     {
         Categories.Clear();

@@ -7,10 +7,6 @@ using FileGroupy.Models;
 
 namespace FileGroupy.Services;
 
-/// <summary>
-/// 基于 MediaDevices/WPD 的 MTP/PTP 扫描实现手机端通常只允许低并发请求，
-/// 因此采用单会话顺序枚举，避免设备断连和传输协议错误
-/// </summary>
 public sealed class MtpDeviceService : IMtpDeviceService
 {
     private static readonly object ScanCacheLock = new();
@@ -35,7 +31,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
                     device.Connect();
                     try
                     {
-                        // iPhone 在 Windows 中通常通过 Apple Mobile Device 驱动以 PTP 设备出现，
+                        // iPhone 在 Windows 中通常通过 Apple Mobile Device 驱动以 PTP 设备出现,
                         // 设备类型可能被报告为 Camera、MediaPlayer 或 Generic
                         var protocol = ResolvePortableProtocol(device);
                         if (protocol is null)
@@ -43,8 +39,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
                             continue;
                         }
 
-                        // 仅验证可访问根目录，不再要求根目录下必须可枚举到子项，
-                        // 避免 iPhone/PTP 设备因目录结构差异被误判为不可用
+                        // 仅验证可访问根目录,不再要求根目录下必须可枚举到子项,
                         _ = device.GetRootDirectory();
 
                         devices.Add(new MtpDeviceInfo(device.DeviceId, device.FriendlyName, device.Manufacturer, protocol.Value));
@@ -60,7 +55,6 @@ public sealed class MtpDeviceService : IMtpDeviceService
                 }
                 catch (Exception)
                 {
-                    // 未解锁、非 MTP/PTP 或无法读取存储的 WPD 设备不会显示在列表中
                 }
                 finally
                 {
@@ -138,7 +132,6 @@ public sealed class MtpDeviceService : IMtpDeviceService
     public Task<string> DownloadPreviewFileAsync(FileItem file, CancellationToken cancellationToken = default) =>
         Task.Run(() => DownloadPreviewFile(file, cancellationToken), cancellationToken);
 
-    /// <summary>在单个 MTP 会话中递归枚举设备根目录，避免设备不支持多会话并发造成的中断</summary>
     private static FolderScanResult Scan(MtpDeviceInfo deviceInfo, string rootPath, IProgress<FileScanProgress>? progress, CancellationToken cancellationToken)
     {
         var cacheKey = GetScanCacheKey(deviceInfo.DeviceId, rootPath);
@@ -222,7 +215,6 @@ public sealed class MtpDeviceService : IMtpDeviceService
                         }
                         catch (Exception)
                         {
-                            // 部分 Android/WPD 对象会返回单项协议错误；跳过该项并继续同一目录的流式枚举
                             skippedItemCount++;
                         }
                     }
@@ -233,7 +225,6 @@ public sealed class MtpDeviceService : IMtpDeviceService
                 }
                 catch (Exception)
                 {
-                    // 0x80042009 等 WPD 枚举错误通常只影响当前目录，不能丢弃此前已扫描的大容量结果
                     skippedItemCount++;
                     if (progressTimer.ElapsedMilliseconds >= 300)
                     {
@@ -254,7 +245,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>在一个设备会话中顺序下载文件；MTP 设备通常无法从并行数据流中获得更高吞吐</summary>
+    /// <summary>在一个设备会话中顺序下载文件;MTP 设备通常无法从并行数据流中获得更高吞吐</summary>
     private static FileTransferResult TransferToLocal(
         IReadOnlyCollection<FileItem> sourceFiles,
         FileTransferOptions options,
@@ -357,7 +348,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>在临时目录下载单个 MTP 文件，供预览或 Shell 默认程序访问</summary>
+    /// <summary>在临时目录下载单个 MTP 文件,供预览或 Shell 默认程序访问</summary>
     private static string DownloadPreviewFile(FileItem file, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -384,7 +375,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>在单一 MTP 会话中顺序上传本地文件；成功上传后才删除本地源文件以实现移动</summary>
+    /// <summary>在单一 MTP 会话中顺序上传本地文件;成功上传后才删除本地源文件以实现移动</summary>
     private static FileTransferResult TransferFromLocal(
         IReadOnlyCollection<FileItem> sourceFiles,
         FileTransferOptions options,
@@ -480,11 +471,6 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>在同一设备会话中顺序删除文件，并返回可用于刷新界面的成功与失败明细</summary>
-    /// <param name="sourceFiles">待删除的 MTP 文件集合</param>
-    /// <param name="progress">可选的删除进度接收器</param>
-    /// <param name="cancellationToken">用于中止删除任务的取消标记</param>
-    /// <returns>删除结果</returns>
     private static FileTransferResult DeleteFiles(
         IReadOnlyCollection<FileItem> sourceFiles,
         IProgress<FileTransferProgress>? progress,
@@ -558,13 +544,9 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>生成分类统计副本并上报给 UI，防止后台集合被跨线程读取</summary>
     private static void ReportProgress(IProgress<FileScanProgress>? progress, int folders, int files, long bytes, IReadOnlyDictionary<FileCategory, CategoryScanSummary> categories) =>
         progress?.Report(new FileScanProgress(folders, files, bytes, new Dictionary<FileCategory, CategoryScanSummary>(categories)));
 
-    /// <summary>根据 WPD 设备信息推断 MTP 或 PTP 协议，兼容 iPhone 等被识别为 Generic 或 MediaPlayer 的设备</summary>
-    /// <param name="device">已建立连接的便携设备实例</param>
-    /// <returns>可支持的协议类型；未知类型返回 <see langword="null"/></returns>
     private static PortableDeviceProtocol? ResolvePortableProtocol(MediaDevice device)
     {
         if (device.DeviceType == DeviceType.Phone)
@@ -725,10 +707,8 @@ public sealed class MtpDeviceService : IMtpDeviceService
     /// <summary>根据扩展名确定内置分类</summary>
     private static FileCategory GetCategory(string extension) => FileCategoryCatalog.GetCategory(extension);
 
-    /// <summary>将协议用于扫描结果与界面提示，不影响 WPD 的统一文件 API 调用</summary>
     private static string GetProtocolName(PortableDeviceProtocol protocol) => protocol == PortableDeviceProtocol.Ptp ? "PTP" : "MTP";
 
-    /// <summary>根据选择的目录结构策略生成本地目标路径</summary>
     private static string GetDestinationPath(FileItem file, string destinationRoot, string sourceRoot, bool preserveStructure)
     {
         var relativePath = preserveStructure && !string.IsNullOrWhiteSpace(sourceRoot)
@@ -772,7 +752,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         device.CreateDirectory(directoryPath);
     }
 
-    /// <summary>移动设备文件后确认源对象已消失，避免将仍存在的文件从列表中过早移除</summary>
+    /// <summary>移动设备文件后确认源对象已消失,避免将仍存在的文件从列表中过早移除</summary>
     private static void EnsureMtpSourceWasMoved(MediaDevice device, string sourcePath)
     {
         if (device.FileExists(sourcePath))
@@ -781,7 +761,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>移动本地文件后确认源文件已删除，避免将失效状态报告为成功</summary>
+    /// <summary>移动本地文件后确认源文件已删除,避免将失效状态报告为成功</summary>
     private static void EnsureLocalSourceWasMoved(string sourcePath)
     {
         if (File.Exists(sourcePath))
@@ -790,7 +770,6 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>在 MTP 存储中查找可用的原名或“名称 (n).扩展名”目标路径</summary>
     private static string GetAvailableLocalPath(string path)
     {
         if (!File.Exists(path))
@@ -811,7 +790,6 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>在 MTP 存储中查找可用的原名或“名称 (n).扩展名”目标路径</summary>
     private static string GetAvailableMtpPath(MediaDevice device, string path)
     {
         if (!device.FileExists(path))
@@ -832,7 +810,6 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    /// <summary>在一次短生命周期会话中访问手机，确保 COM/WPD 连接始终被释放</summary>
     private static T WithDevice<T>(MtpDeviceInfo deviceInfo, Func<MediaDevice, T> action)
     {
         using var device = MediaDevice.GetDevices().FirstOrDefault(candidate => candidate.DeviceId == deviceInfo.DeviceId)

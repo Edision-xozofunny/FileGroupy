@@ -9,7 +9,6 @@ public enum FileCategory
     Audio,
     /// <summary>视频文件</summary>
     Video,
-    /// <summary>Office、PDF 及开放文档格式</summary>
     Office,
     /// <summary>压缩归档文件</summary>
     Archives,

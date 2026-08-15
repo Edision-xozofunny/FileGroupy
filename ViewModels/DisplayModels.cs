@@ -5,66 +5,51 @@ using FileGroupy.Models;
 
 namespace FileGroupy.ViewModels;
 
-/// <summary>用于概览页分类卡片的统计数据</summary>
 public sealed class CategorySummary
 {
-    /// <summary>卡片对应的文件分类</summary>
     public required FileCategory Category { get; init; }
     /// <summary>界面显示的分类名称</summary>
     public required string Name { get; init; }
     /// <summary>界面显示的简短分类标识</summary>
     public required string Icon { get; init; }
-    /// <summary>当前分类内的文件数量</summary>
     public int FileCount { get; init; }
-    /// <summary>当前分类所有文件的总大小，单位为字节</summary>
     public long TotalSize { get; init; }
     /// <summary>适合直接显示在界面上的友好大小文本</summary>
     public string SizeText => SizeFormatter.Format(TotalSize);
 }
 
-/// <summary>文件浏览表格中的一行，可以是分类根行或实际文件行</summary>
+/// <summary>文件浏览表格中的一行,可以是分类根行或实际文件行</summary>
 public partial class ExplorerRow : ObservableObject, IStickyDataGridRow
 {
-    /// <summary>指示当前行是否为分类根节点</summary>
     public bool IsCategory { get; init; }
-    /// <summary>指示当前行是否为扩展名分组节点</summary>
     public bool IsExtensionGroup { get; init; }
-    /// <summary>分类根节点是否处于展开状态；文件行始终视为展开</summary>
-    public bool IsExpanded { get; set; } = true;
-    /// <summary>当前行所属的文件分类</summary>
+    /// <summary>分类根节点是否处于展开状态, 文件行始终视为展开</summary>
+    [ObservableProperty] private bool _isExpanded = true;
     public FileCategory Category { get; init; }
     /// <summary>分类名或文件名</summary>
     public string Name { get; init; } = string.Empty;
-    /// <summary>文件扩展名；分类根行为空</summary>
+    /// <summary>文件扩展名;分类根行为空</summary>
     public string Extension { get; init; } = string.Empty;
-    /// <summary>供表格显示的类型说明；保留 <see cref="Extension"/> 的原始扩展名语义</summary>
+    /// <summary>供表格显示的类型说明;保留 <see cref="Extension"/> 的原始扩展名语义</summary>
     public string TypeDisplayName => FileCategoryCatalog.GetDisplayName(Extension);
-    /// <summary>文件完整路径；分类根行为空</summary>
+    /// <summary>文件完整路径;分类根行为空</summary>
     public string Location { get; init; } = string.Empty;
-    /// <summary>格式化后的最后修改时间；分类根行为空</summary>
     public string Modified { get; init; } = string.Empty;
     /// <summary>格式化后的文件或分类总大小</summary>
     public string Size { get; init; } = string.Empty;
-    /// <summary>分类根行包含的文件数量；文件行固定为零</summary>
+    /// <summary>分类根行包含的文件数量;文件行固定为零</summary>
     public int ChildCount { get; init; }
-    /// <summary>扩展名分组对应的原始扩展名；其他行为空</summary>
     public string GroupExtension { get; init; } = string.Empty;
-    /// <summary>文件行关联的原始文件元数据；分类根行为空</summary>
     public FileItem? File { get; init; }
-    /// <summary>指示当前行是否为可展开或可全选的分组节点</summary>
     public bool IsGroup => IsCategory || IsExtensionGroup;
-    /// <summary>分组行在滚动时作为当前分组标题固定在表头下方</summary>
     public bool IsStickyRow => IsCategory || IsExtensionGroup;
 
-    /// <summary>固定分组层级，分类为 0，扩展名分组为 1，文件行为最大层级</summary>
+    /// <summary>固定分组层级,分类为 0,扩展名分组为 1,文件行为最大层级</summary>
     public int StickyLevel => IsCategory ? 0 : IsExtensionGroup ? 1 : int.MaxValue;
-    /// <summary>指示当前行是否允许通过复选框参与批量操作</summary>
     public bool IsSelectable => true;
 
-    /// <summary>由 CommunityToolkit 生成的行选中状态公开属性</summary>
     [ObservableProperty] private bool _isSelected;
 
-    /// <summary>按行类型生成包含展开标志或文件名的显示文本</summary>
     public string DisplayName => IsCategory
         ? $"{(IsExpanded ? "▾" : "▸")} {Name}  {ChildCount:N0} 个文件"
         : IsExtensionGroup
@@ -73,8 +58,8 @@ public partial class ExplorerRow : ObservableObject, IStickyDataGridRow
 }
 
 /// <summary>鼠标悬停图片行时显示的轻量预览数据</summary>
-/// <param name="ImageSource">可显示的缩略图；损坏或不可读时为空</param>
-/// <param name="Resolution">分辨率文本，例如 1920 × 1080</param>
+/// <param name="ImageSource">可显示的缩略图;损坏或不可读时为空</param>
+/// <param name="Resolution">分辨率文本,例如 1920 × 1080</param>
 /// <param name="SizeText">文件大小文本</param>
 /// <param name="TypeText">扩展名文本</param>
 /// <param name="IsCorrupted">是否为损坏或不可解码的图片</param>
@@ -85,7 +70,6 @@ public sealed record ImageHoverPreview(
     string TypeText,
     bool IsCorrupted);
 
-/// <summary>将字节数转换为 KB、MB、GB 等易读文本</summary>
 public static class SizeFormatter
 {
     /// <summary>格式化给定的字节数</summary>

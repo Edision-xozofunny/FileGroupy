@@ -3,6 +3,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:FileGroupy.Controls"
              xmlns:hc="https://handyorg.github.io/handycontrol">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </UserControl.Resources>
     <Grid Margin="48,42,48,48">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -15,19 +18,25 @@
         </StackPanel>
         <Grid Grid.Row="1" Margin="0,0,0,14">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="240" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock Text="树形层级" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" FontWeight="SemiBold" />
-            <TextBox x:Name="SearchBox" Grid.Column="1" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Height="32" Margin="0,0,10,0" VerticalContentAlignment="Center" ToolTip="按 Ctrl+F 搜索文件" />
-            <Button Grid.Column="2" Click="SearchButton_OnClick" Content="搜索" Style="{StaticResource SecondaryButton}" Padding="16,7" />
-            <ComboBox Grid.Column="3" ItemsSource="{Binding ExpansionLevels}" SelectedItem="{Binding SelectedExpansionLevel}" Width="78" Height="32" Margin="10,0,10,0" VerticalContentAlignment="Center" />
-            <Button Grid.Column="4" Command="{Binding ExpandToLevelCommand}" Content="展开" Style="{StaticResource SecondaryButton}" Padding="16,7" />
-            <Button Grid.Column="5" Command="{Binding CollapseAllCommand}" Content="收缩" Style="{StaticResource NeutralButton}" Padding="16,7" Margin="8,0,0,0" />
+            <Button Grid.Column="0" Command="{Binding ClearSelectionCommand}" Content="取消全选" Style="{StaticResource NeutralButton}" Padding="16,7" />
+            <TextBlock Grid.Column="1" Text="树形层级" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" FontWeight="SemiBold" Margin="20,0,10,0" />
+            <TextBox x:Name="SearchBox" Grid.Column="2" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Height="32" Margin="0,0,10,0" VerticalContentAlignment="Center" ToolTip="按 Ctrl+F 搜索文件" />
+            <Button Grid.Column="3" Click="SearchButton_OnClick" Content="搜索" Style="{StaticResource SecondaryButton}" Padding="16,7" />
+            <ComboBox Grid.Column="4" ItemsSource="{Binding ExpansionLevels}" SelectedItem="{Binding SelectedExpansionLevel}" Width="78" Height="32" Margin="10,0,10,0" VerticalContentAlignment="Center" />
+            <Button Grid.Column="5" Command="{Binding ExpandToLevelCommand}" Content="展开" Style="{StaticResource SecondaryButton}" Padding="16,7" />
+            <Button Grid.Column="6" Command="{Binding CollapseAllCommand}" Content="收缩" Style="{StaticResource NeutralButton}" Padding="16,7" Margin="8,0,0,0" />
+            <Button Grid.Column="7" Command="{Binding RefreshCurrentCommand}" Content="刷新" Style="{StaticResource SecondaryButton}" Padding="16,7" Margin="8,0,0,0" />
+            <Button Grid.Column="8" Command="{Binding ToggleInvalidImagesFilterCommand}" Content="无效图像" Style="{StaticResource NeutralButton}" Padding="16,7" Margin="8,0,0,0" />
         </Grid>
         <Grid Grid.Row="2">
             <Grid.RowDefinitions>
@@ -51,19 +60,26 @@
                 <ItemsControl ItemsSource="{Binding StickyItems, ElementName=FilesGrid}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Button Style="{StaticResource ExplorerStickyItemButton}"
-                                    Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                    CommandParameter="{Binding}">
-                                <Grid Height="22">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="44" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="110" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Style="{StaticResource ExplorerStickyItemText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="6,0,4,0" />
-                                    <TextBlock Grid.Column="2" Text="{Binding Size}" Foreground="#667085" VerticalAlignment="Center" />
-                                </Grid>
-                            </Button>
+                            <Grid Height="22">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="44" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="110" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" IsEnabled="{Binding IsSelectable}" Click="FileCheckBox_OnClick" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource ExplorerStickyItemButton}"
+                                        Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="110" />
+                                        </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}" Style="{StaticResource ExplorerStickyItemText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="6,0,4,0" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Size}" Foreground="#667085" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Button>
+                            </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -120,6 +136,7 @@
                     </DataGrid.Columns>
                 </controls:StickyDataGrid>
                 <Border x:Name="SelectionBox" Visibility="Collapsed" BorderBrush="#1677FF" BorderThickness="1" Background="#261677FF" IsHitTestVisible="False" />
+                <TextBlock Text="{Binding OperationStatus}" Foreground="{StaticResource SuccessTextBrush}" Background="{StaticResource SuccessSoftBrush}" Margin="12" Padding="10,6" HorizontalAlignment="Left" VerticalAlignment="Bottom" Visibility="{Binding HasOperationStatus, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <Popup x:Name="ImageHoverPopup" Placement="Relative" StaysOpen="True" AllowsTransparency="True" IsHitTestVisible="False" IsOpen="False">
                     <Border Style="{StaticResource ExplorerImageHoverPopupBorder}" Width="300">
                         <Grid>

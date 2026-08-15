@@ -7,35 +7,20 @@ using FileGroupy.ViewModels;
 
 namespace FileGroupy.Views;
 
-/// <summary>文件浏览页面的 WPF 视图，处理表格拖拽框选等纯视觉交互</summary>
+/// <summary>文件浏览页面的 WPF 视图,处理表格拖拽框选等纯视觉交互</summary>
 public partial class FileExplorerView : System.Windows.Controls.UserControl
 {
-    /// <summary>开始拖拽框选时相对于表格的鼠标坐标；为空表示未框选</summary>
+    /// <summary>开始拖拽框选时相对于表格的鼠标坐标;为空表示未框选</summary>
     private System.Windows.Point? _selectionOrigin;
-    /// <summary>当前右键菜单关联的文件行，供菜单点击后稳定传递命令参数</summary>
     private ExplorerRow? _contextMenuRow;
-    /// <summary>当前鼠标悬停的表格行，避免重复解码同一张图片</summary>
     private ExplorerRow? _hoverPreviewRow;
-    /// <summary>图片悬停预览的取消源，移动鼠标或离开表格时终止后台加载</summary>
+    /// <summary>图片悬停预览的取消源,移动鼠标或离开表格时终止后台加载</summary>
     private CancellationTokenSource? _hoverPreviewCancellationTokenSource;
 
     /// <summary>初始化文件浏览页面及其 XAML 组件</summary>
     public FileExplorerView() => InitializeComponent();
 
-    /// <summary>复选框绑定改变后，通知视图模型重新计算选择汇总</summary>
-    /// <param name="sender">触发事件的复选框</param>
-    /// <param name="e">WPF 路由事件参数</param>
-        /// <summary>记录鼠标按下位置，作为后续框选矩形的起点</summary>
-        /// <param name="sender">文件表格控件</param>
-        /// <param name="e">鼠标按下事件参数</param>
-        /// <summary>鼠标按住移动时绘制选择矩形，并选择与矩形相交的文件行</summary>
-        /// <param name="sender">文件表格控件</param>
-        /// <param name="e">鼠标移动事件参数</param>
-        // 轻微抖动视为普通单击，避免显示无意义的选择框
-        // 仅对已生成可视容器的行做几何命中判断，兼容表格虚拟化
-        /// <summary>结束框选并隐藏临时选择矩形</summary>
-        /// <param name="sender">文件表格控件</param>
-        /// <param name="e">鼠标释放事件参数</param>
+        // 轻微抖动视为普通单击,避免显示无意义的选择框
     private void FileCheckBox_OnClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is FileExplorerViewModel viewModel && sender is System.Windows.Controls.CheckBox { DataContext: ExplorerRow row, IsChecked: bool selected })
@@ -44,9 +29,6 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         }
     }
 
-    /// <summary>处理表头全选框的勾选变化并同步全部扫描文件</summary>
-    /// <param name="sender">触发事件的表头复选框</param>
-    /// <param name="e">WPF 路由事件参数</param>
     private void SelectAllCheckBox_OnClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is FileExplorerViewModel viewModel && sender is System.Windows.Controls.CheckBox { IsChecked: bool selected })
@@ -112,9 +94,6 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         SelectionBox.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>悬停图片文件行时显示缩略图浮层，离开后自动销毁</summary>
-    /// <param name="sender">触发事件的文件表格</param>
-    /// <param name="e">鼠标移动事件参数</param>
     private async void FilesGrid_OnMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
         if (e.LeftButton == MouseButtonState.Pressed)
@@ -166,16 +145,12 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         }
         catch (OperationCanceledException)
         {
-            // 鼠标移动频繁会取消旧请求，忽略即可
+            // 鼠标移动频繁会取消旧请求,忽略即可
         }
     }
 
-    /// <summary>鼠标离开文件表格后关闭图片浮层并释放加载任务</summary>
-    /// <param name="sender">触发事件的文件表格</param>
-    /// <param name="e">鼠标事件参数</param>
     private void FilesGrid_OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => HideImageHoverPopup();
 
-    /// <summary>关闭图片悬停浮层并清理缓存引用</summary>
     private void HideImageHoverPopup()
     {
         _hoverPreviewCancellationTokenSource?.Cancel();
@@ -204,7 +179,6 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         base.OnPreviewKeyDown(e);
     }
 
-    /// <summary>右键文件行时仅显示针对单个文件的 Shell 打开命令</summary>
     private void FilesGrid_OnContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         var row = FindAncestor<DataGridRow>(e.OriginalSource as DependencyObject)?.Item as ExplorerRow;
@@ -270,7 +244,6 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         return null;
     }
 
-    /// <summary>双击实际文件行时按 Windows 默认关联打开，未关联时交给系统“打开方式”</summary>
     private async void FilesGrid_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (DataContext is FileExplorerViewModel viewModel && FilesGrid.SelectedItem is ExplorerRow { File: not null } row)

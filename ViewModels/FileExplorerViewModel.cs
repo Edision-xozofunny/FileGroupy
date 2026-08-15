@@ -3,82 +3,77 @@ using System.IO;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using FileGroupy.Controls;
 using FileGroupy.Models;
 using FileGroupy.Services;
 using FileGroupy.Views;
 
 namespace FileGroupy.ViewModels;
 
-/// <summary>文件浏览页视图模型，提供分类树、选择状态和批量复制/移动入口</summary>
-/// <param name="transferService">执行批量文件操作的服务</param>
+/// <summary>文件浏览页视图模型, 提供分类树, 选择状态和批量文件操作</summary>
 public partial class FileExplorerViewModel(
     IFileTransferService transferService,
     IMtpDeviceService mtpDeviceService,
     IFilePreviewService previewService) : ObservableObject
 {
-    /// <summary>最近一次扫描的全部文件，用于按分类重新构建显示行</summary>
+    /// <summary>最近一次扫描的全部文件</summary>
     private readonly List<FileItem> _files = [];
-    /// <summary>当前被展开的分类集合，重建行时用于保留用户的展开状态</summary>
+    /// <summary>当前展开的分类节点集合</summary>
     private readonly HashSet<FileCategory> _expandedCategories = Enum.GetValues<FileCategory>().ToHashSet();
-    /// <summary>当前已展开的“分类|扩展名”节点集合</summary>
+    /// <summary>当前展开的扩展名节点集合</summary>
     private readonly HashSet<string> _expandedExtensions = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>跨折叠和视图重建保留的已选文件完整路径集合</summary>
     private readonly HashSet<string> _selectedPaths = new(StringComparer.OrdinalIgnoreCase);
-    /// <summary>可选的单一分类筛选条件；为空时显示所有分类</summary>
+    /// <summary>可选的单一分类筛选条件;为空时显示所有分类</summary>
     private FileCategory? _categoryFilter;
-    /// <summary>当前异步搜索命中的文件路径；为空表示未应用搜索筛选</summary>
+    /// <summary>当前搜索命中的文件路径, 空值表示未应用搜索</summary>
     private HashSet<string>? _searchMatchedPaths;
     /// <summary>用于取消被新关键字取代的后台搜索任务</summary>
     private CancellationTokenSource? _searchCancellationTokenSource;
-    /// <summary>树批量操作版本，用于丢弃较早异步操作的过期结果</summary>
+    /// <summary>树操作版本, 用于丢弃过期异步结果</summary>
     private int _treeOperationVersion;
-    /// <summary>最近一次扫描结果的展示路径，用于操作后回写概览统计</summary>
+    /// <summary>最近一次扫描结果的展示路径</summary>
     private string _currentScanPath = string.Empty;
-    /// <summary>最近一次扫描结果中的目录数量，用于维持概览页统计结构一致</summary>
+    /// <summary>最近一次扫描结果中的目录数量</summary>
     private int _currentFolderCount;
-    /// <summary>最近一次扫描结果中的跳过项数量，用于维持概览页文案</summary>
+    /// <summary>最近一次扫描结果中的跳过项数量</summary>
     private int _currentSkippedItemCount;
-    /// <summary>当前结果是否来自本地目录扫描，用于判定复制或移动后是否可补充新增节点</summary>
+    /// <summary>当前结果是否来自本地目录扫描</summary>
     private bool _isLocalScan;
+    /// <summary>是否仅显示扫描时无法解码的图像文件.</summary>
+    private bool _showInvalidImagesOnly;
 
     /// <summary>绑定到表格的根行和文件子行集合</summary>
-    public ObservableCollection<ExplorerRow> Rows { get; } = [];
+    public BulkObservableCollection<ExplorerRow> Rows { get; } = [];
     /// <summary>文件树可选的最大展开层级</summary>
     public IReadOnlyList<int> ExpansionLevels { get; } = [1, 2, 3, 4, 5];
 
-    /// <summary>由工具生成的页面标题公开绑定属性</summary>
+    /// <summary>页面标题</summary>
     [ObservableProperty] private string _title = "全部文件";
-    /// <summary>由工具生成的页面副标题公开绑定属性</summary>
+    /// <summary>页面副标题</summary>
     [ObservableProperty] private string _subtitle = "选择文件夹后，以文件类型为根节点浏览内容";
-    /// <summary>由工具生成的表头全选框状态公开绑定属性</summary>
+    /// <summary>表头全选框状态</summary>
     [ObservableProperty] private bool _isAllSelected;
-    /// <summary>由工具生成的当前已选文件数量公开绑定属性</summary>
+    /// <summary>当前已选文件数量</summary>
     [ObservableProperty] private int _selectedFileCount;
-    /// <summary>由工具生成的批量展开目标层级公开绑定属性；默认显示分类和扩展名两层</summary>
+    /// <summary>批量展开目标层级</summary>
     [ObservableProperty] private int _selectedExpansionLevel = 2;
-    /// <summary>由工具生成的树批量操作进行中状态公开绑定属性</summary>
+    /// <summary>树操作是否正在进行</summary>
     [ObservableProperty] private bool _isTreeOperationInProgress;
-    /// <summary>由工具生成的文件模糊检索关键字公开绑定属性</summary>
+    /// <summary>文件模糊检索关键字</summary>
     [ObservableProperty] private string _searchQuery = string.Empty;
+    /// <summary>最近一次文件操作的状态文本</summary>
+    [ObservableProperty] private string _operationStatus = string.Empty;
 
-    /// <summary>文件集合发生增删改后触发，供概览页和分类卡片同步刷新</summary>
+    /// <summary>是否存在可展示的文件操作状态</summary>
+    public bool HasOperationStatus => !string.IsNullOrWhiteSpace(OperationStatus);
+
+    /// <summary>文件集合发生增删改后触发</summary>
     public event EventHandler<FolderScanResult>? FilesChanged;
+    /// <summary>请求重新扫描当前来源</summary>
+    public event EventHandler? RefreshRequested;
 
-    /// <summary>接收新扫描结果，清除筛选并显示全部分类</summary>
-    /// <param name="result">最新的目录扫描结果</param>
-        /// <summary>仅显示指定分类下的文件</summary>
-        /// <param name="category">需要筛选的文件分类</param>
-        /// <summary>切换一个分类根节点的展开或折叠状态</summary>
-        /// <param name="row">用户点击的表格行</param>
-        /// <summary>切换文件行，或整个分类下所有已展开文件行的选择状态</summary>
-        /// <param name="row">用户操作的表格行</param>
-        /// <summary>按表头复选框状态全选或取消选择所有可见文件行</summary>
-        /// <summary>打开复制对话框，处理当前选中的文件</summary>
-        /// <summary>打开移动对话框，处理当前选中的文件</summary>
-        /// <summary>决定批量操作命令是否可用</summary>
-        /// <returns>至少选择一个文件时返回 <see langword="true"/></returns>
-        /// <summary>创建并显示复制或移动参数对话框</summary>
-        /// <param name="moveFiles">是否以移动模式打开</param>
+    /// <summary>接收新扫描结果并显示全部分类</summary>
     public void Load(FolderScanResult result)
     {
         _files.Clear();
@@ -87,6 +82,8 @@ public partial class FileExplorerViewModel(
         _searchMatchedPaths = null;
         SearchQuery = string.Empty;
         _categoryFilter = null;
+        _showInvalidImagesOnly = false;
+        OperationStatus = string.Empty;
         _currentScanPath = result.Path;
         _currentFolderCount = result.FolderCount;
         _currentSkippedItemCount = result.SkippedItemCount;
@@ -100,7 +97,7 @@ public partial class FileExplorerViewModel(
         CollapseAllCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>清空上一次扫描的文件、选择和树形行，使浏览页面恢复初始状态</summary>
+    /// <summary>清空上一次扫描的文件、选择和树形行,使浏览页面恢复初始状态</summary>
     public void Clear()
     {
         _files.Clear();
@@ -111,6 +108,8 @@ public partial class FileExplorerViewModel(
         _expandedCategories.Clear();
         _expandedCategories.UnionWith(Enum.GetValues<FileCategory>());
         _categoryFilter = null;
+        _showInvalidImagesOnly = false;
+        OperationStatus = string.Empty;
         _currentScanPath = string.Empty;
         _currentFolderCount = 0;
         _currentSkippedItemCount = 0;
@@ -123,34 +122,65 @@ public partial class FileExplorerViewModel(
         CollapseAllCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>仅显示指定分类下的文件</summary>
     public void ShowCategory(FileCategory category)
     {
         _categoryFilter = category;
+        _showInvalidImagesOnly = false;
         Title = $"{GetCategoryName(category)}文件";
         Subtitle = "分类卡片筛选结果";
         BuildRows();
     }
 
-    /// <summary>清除分类卡片带来的筛选条件，恢复显示最近扫描结果中的全部文件分类</summary>
+    /// <summary>清除分类筛选并显示全部文件</summary>
     public void ShowAll()
     {
         _categoryFilter = null;
+        _showInvalidImagesOnly = false;
         Title = "全部文件";
         Subtitle = _files.Count == 0 ? "选择文件夹后，以文件类型为根节点浏览内容" : $"共 {_files.Count:N0} 个文件";
         BuildRows();
     }
 
+    /// <summary>请求刷新当前扫描来源</summary>
     [RelayCommand]
-    private void ToggleGroup(ExplorerRow row)
+    private void RefreshCurrent() => RefreshRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>清除当前全部选择</summary>
+    [RelayCommand]
+    private void ClearSelection()
+    {
+        _selectedPaths.Clear();
+        SynchronizeVisibleSelection();
+    }
+
+    /// <summary>切换仅显示无法解码图像的筛选条件</summary>
+    [RelayCommand]
+    private void ToggleInvalidImagesFilter()
+    {
+        _showInvalidImagesOnly = !_showInvalidImagesOnly;
+        Title = _showInvalidImagesOnly ? "无效图像" : "全部文件";
+        Subtitle = _showInvalidImagesOnly ? "扫描时无法解码的图像文件，可全选后删除" : $"共 {_files.Count:N0} 个文件";
+        BuildRows();
+    }
+
+    /// <summary>展开或折叠分类及扩展名节点</summary>
+    [RelayCommand]
+    private async Task ToggleGroupAsync(ExplorerRow row)
     {
         if (IsTreeOperationInProgress)
         {
             return;
         }
 
+        var expand = !row.IsExpanded;
         if (row.IsCategory)
         {
-            if (!_expandedCategories.Add(row.Category))
+            if (expand)
+            {
+                _expandedCategories.Add(row.Category);
+            }
+            else
             {
                 _expandedCategories.Remove(row.Category);
             }
@@ -158,7 +188,11 @@ public partial class FileExplorerViewModel(
         else if (row.IsExtensionGroup)
         {
             var key = GetExtensionKey(row.Category, row.GroupExtension);
-            if (!_expandedExtensions.Add(key))
+            if (expand)
+            {
+                _expandedExtensions.Add(key);
+            }
+            else
             {
                 _expandedExtensions.Remove(key);
             }
@@ -168,10 +202,40 @@ public partial class FileExplorerViewModel(
             return;
         }
 
-        BuildRows();
+        row.IsExpanded = expand;
+        var rowIndex = Rows.IndexOf(row);
+        if (rowIndex < 0)
+        {
+            BuildRows();
+            return;
+        }
+
+        if (!expand)
+        {
+            Rows.RemoveRange(rowIndex + 1, GetVisibleDescendantCount(rowIndex, row));
+            return;
+        }
+
+        var operationVersion = ++_treeOperationVersion;
+        IsTreeOperationInProgress = true;
+        try
+        {
+            var children = await Task.Run(() => CreateDirectChildren(row));
+            if (operationVersion == _treeOperationVersion)
+            {
+                Rows.InsertRange(rowIndex + 1, children);
+            }
+        }
+        finally
+        {
+            if (operationVersion == _treeOperationVersion)
+            {
+                IsTreeOperationInProgress = false;
+            }
+        }
     }
 
-    /// <summary>异步展开至选定深度；本树只有分类、扩展名、文件三层，超过三级等同于完全展开</summary>
+    /// <summary>异步展开至选定深度;本树只有分类、扩展名、文件三层,超过三级等同于完全展开</summary>
     [RelayCommand(CanExecute = nameof(CanChangeTreeExpansion))]
     private async Task ExpandToLevelAsync()
     {
@@ -181,7 +245,7 @@ public partial class FileExplorerViewModel(
         await RebuildRowsAsync(operationVersion);
     }
 
-    /// <summary>异步折叠所有分类节点，保留扫描和选择状态</summary>
+    /// <summary>异步折叠所有分类节点,保留扫描和选择状态</summary>
     [RelayCommand(CanExecute = nameof(CanChangeTreeExpansion))]
     private async Task CollapseAllAsync()
     {
@@ -192,6 +256,7 @@ public partial class FileExplorerViewModel(
         await RebuildRowsAsync(operationVersion);
     }
 
+    /// <summary>判断是否允许执行批量展开或收缩</summary>
     private bool CanChangeTreeExpansion() => !IsTreeOperationInProgress && _files.Count > 0;
 
     partial void OnIsTreeOperationInProgressChanged(bool value)
@@ -200,6 +265,7 @@ public partial class FileExplorerViewModel(
         CollapseAllCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>切换单个文件或分组文件的选择状态</summary>
     [RelayCommand]
     private void ToggleRowSelection(ExplorerRow row)
     {
@@ -219,29 +285,33 @@ public partial class FileExplorerViewModel(
         SynchronizeVisibleSelection();
     }
 
+    /// <summary>按当前表头状态选择或取消选择可见文件</summary>
     [RelayCommand]
     private void ToggleSelectAll()
     {
-        SetSelection(_files, !IsAllSelected);
+        SetSelection(GetVisibleFiles(), !IsAllSelected);
         SynchronizeVisibleSelection();
     }
 
+    /// <summary>打开复制对话框</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task CopySelectedAsync() => await ShowTransferDialogAsync(false);
 
+    /// <summary>打开移动对话框</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task MoveSelectedAsync() => await ShowTransferDialogAsync(true);
 
-    /// <summary>打开删除对话框，执行批量删除并同步刷新树节点和概览统计</summary>
+    /// <summary>打开删除对话框</summary>
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task DeleteSelectedAsync() => await ShowDeleteDialogAsync();
 
+    /// <summary>判断是否至少选择了一个文件</summary>
     private bool HasSelection() => SelectedFileCount > 0;
 
-    /// <summary>仅允许对实际文件行执行 Windows Shell 打开操作</summary>
+    /// <summary>仅允许对实际文件行执行打开操作</summary>
     private static bool CanOpenFile(ExplorerRow? row) => row?.File is not null;
 
-    /// <summary>使用 Windows 默认关联打开文件；未关联时显示系统“打开方式”</summary>
+    /// <summary>使用 Windows 默认关联打开文件</summary>
     [RelayCommand(CanExecute = nameof(CanOpenFile))]
     private async Task OpenFileAsync(ExplorerRow? row)
     {
@@ -260,7 +330,7 @@ public partial class FileExplorerViewModel(
         }
     }
 
-    /// <summary>显示 Windows 内置“打开方式”选择器</summary>
+    /// <summary>显示 Windows 打开方式选择器</summary>
     [RelayCommand(CanExecute = nameof(CanOpenFile))]
     private async Task OpenWithFileAsync(ExplorerRow? row)
     {
@@ -298,11 +368,11 @@ public partial class FileExplorerViewModel(
         }
     }
 
+    /// <summary>仅本地文件支持在资源管理器中定位</summary>
     private static bool CanOpenLocalFile(ExplorerRow? row) =>
         row?.File?.SourceKind == StorageSourceKind.LocalFileSystem;
 
-    /// <summary>确保右键行至少被加入当前选择集合，便于单文件直接执行复制、移动或删除</summary>
-    /// <param name="row">右键命中的表格行</param>
+    /// <summary>确保右键命中的文件行已加入当前选择</summary>
     public void EnsureContextRowSelected(ExplorerRow row)
     {
         if (row.File is null)
@@ -319,10 +389,7 @@ public partial class FileExplorerViewModel(
         SynchronizeVisibleSelection();
     }
 
-    /// <summary>为图片文件构建悬停预览数据；无法解码时返回损坏提示</summary>
-    /// <param name="row">当前鼠标所在表格行</param>
-    /// <param name="cancellationToken">用于取消预览加载的标记</param>
-    /// <returns>图片悬停预览数据；非图片行返回 <see langword="null"/></returns>
+    /// <summary>为图片文件创建悬停预览数据</summary>
     public async Task<ImageHoverPreview?> CreateImageHoverPreviewAsync(ExplorerRow row, CancellationToken cancellationToken = default)
     {
         if (row.File is null || row.File.Category != FileCategory.Images)
@@ -358,9 +425,7 @@ public partial class FileExplorerViewModel(
         }
     }
 
-    /// <summary>打开复制或移动对话框，并在完成后刷新树数据、缓存与提示信息</summary>
-    /// <param name="moveFiles">是否以移动模式执行</param>
-    /// <returns>异步任务</returns>
+    /// <summary>打开复制或移动对话框, 完成后同步文件树和缓存</summary>
     private async Task ShowTransferDialogAsync(bool moveFiles)
     {
         var selectedFiles = _files.Where(file => _selectedPaths.Contains(file.FullPath)).ToList();
@@ -393,8 +458,7 @@ public partial class FileExplorerViewModel(
         await Task.CompletedTask;
     }
 
-    /// <summary>打开删除对话框并在完成后同步树节点、缓存和结果提示</summary>
-    /// <returns>异步任务</returns>
+    /// <summary>打开删除对话框, 完成后同步文件树和缓存</summary>
     private async Task ShowDeleteDialogAsync()
     {
         var selectedFiles = _files.Where(file => _selectedPaths.Contains(file.FullPath)).ToList();
@@ -424,9 +488,7 @@ public partial class FileExplorerViewModel(
         await Task.CompletedTask;
     }
 
-    /// <summary>根据复制或移动结果更新树节点，并广播统计刷新事件</summary>
-    /// <param name="moveFiles">是否为移动模式</param>
-    /// <param name="result">操作结果</param>
+    /// <summary>根据复制或移动结果更新当前文件集合</summary>
     private void ApplyTransferResult(bool moveFiles, FileTransferResult result)
     {
         if (moveFiles)
@@ -444,24 +506,15 @@ public partial class FileExplorerViewModel(
         NotifyFilesChanged();
     }
 
-    /// <summary>显示复制、移动或删除的结果提示，便于用户确认任务是否完成</summary>
-    /// <param name="operationName">操作名称</param>
-    /// <param name="succeeded">成功数量</param>
-    /// <param name="skipped">跳过数量</param>
-    /// <param name="failed">失败数量</param>
-    private static void ShowOperationResultMessage(string operationName, int succeeded, int skipped, int failed)
+    /// <summary>将批量操作结果显示在当前页面</summary>
+    private void ShowOperationResultMessage(string operationName, int succeeded, int skipped, int failed)
     {
-        var message = $"{operationName}完成：成功 {succeeded:N0}，跳过 {skipped:N0}，失败 {failed:N0}";
-        System.Windows.MessageBox.Show(
-            System.Windows.Application.Current.MainWindow,
-            message,
-            $"{operationName}结果",
-            System.Windows.MessageBoxButton.OK,
-            failed == 0 ? System.Windows.MessageBoxImage.Information : System.Windows.MessageBoxImage.Warning);
+        OperationStatus = $"{operationName}完成：成功 {succeeded:N0}，跳过 {skipped:N0}，失败 {failed:N0}";
     }
 
-    /// <summary>按成功源路径集合删除当前树中的文件项，并同步选择与搜索状态</summary>
-    /// <param name="sourcePaths">需要移除的源路径集合</param>
+    partial void OnOperationStatusChanged(string value) => OnPropertyChanged(nameof(HasOperationStatus));
+
+    /// <summary>从当前文件集合中移除指定源路径</summary>
     private void RemoveFilesBySourcePaths(IEnumerable<string> sourcePaths)
     {
         var removedPathSet = sourcePaths.Select(NormalizeSourcePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -475,8 +528,7 @@ public partial class FileExplorerViewModel(
         _searchMatchedPaths?.RemoveWhere(path => removedPathSet.Contains(NormalizeSourcePath(path)));
     }
 
-    /// <summary>将目标落在当前本地扫描范围内的新文件补充到树数据中</summary>
-    /// <param name="successfulTransfers">成功传输的源目标映射集合</param>
+    /// <summary>补充移动或复制到当前本地扫描范围内的新文件</summary>
     private void AddLocalDestinationFiles(IReadOnlyList<FileTransferSuccess> successfulTransfers)
     {
         if (!_isLocalScan || string.IsNullOrWhiteSpace(_currentScanPath))
@@ -509,7 +561,7 @@ public partial class FileExplorerViewModel(
         }
     }
 
-    /// <summary>通知概览页使用当前树数据重新计算卡片、统计和筛选结果</summary>
+    /// <summary>通知概览页使用当前文件集合重新计算统计信息</summary>
     private void NotifyFilesChanged()
     {
         if (string.IsNullOrWhiteSpace(_currentScanPath))
@@ -522,7 +574,7 @@ public partial class FileExplorerViewModel(
 
     partial void OnSearchQueryChanged(string value) => _ = ApplySearchAsync(value);
 
-    /// <summary>防抖后在线程池中匹配名称、扩展名和位置，避免大量文件搜索阻塞 UI</summary>
+    /// <summary>防抖后在线程池中匹配名称、扩展名和位置,避免大量文件搜索阻塞 UI</summary>
     private async Task ApplySearchAsync(string query)
     {
         _searchCancellationTokenSource?.Cancel();
@@ -552,11 +604,10 @@ public partial class FileExplorerViewModel(
         }
         catch (OperationCanceledException)
         {
-            // 新关键字会取消旧任务，旧结果不能覆盖当前列表
         }
     }
 
-    /// <summary>先执行忽略大小写的包含匹配，再支持关键字字符按顺序出现的模糊匹配</summary>
+    /// <summary>执行忽略大小写的包含匹配和字符顺序模糊匹配</summary>
     private static bool IsSimilarMatch(FileItem file, string query)
     {
         var searchableText = $"{file.Name} {file.Extension} {file.FullPath}";
@@ -581,8 +632,7 @@ public partial class FileExplorerViewModel(
         return false;
     }
 
-    /// <summary>保留应用内轻量文本和图片预览入口，供其它视图按需使用</summary>
-    /// <param name="row">被双击的文件表格行</param>
+    /// <summary>打开应用内文本或图片预览</summary>
     public async Task PreviewAsync(ExplorerRow row)
     {
         if (row.File is null)
@@ -612,11 +662,11 @@ public partial class FileExplorerViewModel(
         }
     }
 
-    /// <summary>显示 Windows Shell 打开失败的统一错误提示</summary>
+    /// <summary>显示打开文件失败提示</summary>
     private static void ShowOpenError(FileItem file, Exception exception) =>
         System.Windows.MessageBox.Show(System.Windows.Application.Current.MainWindow, $"无法打开“{file.Name}”：{exception.Message}", "打开文件", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
 
-    /// <summary>在视图直接修改复选框绑定后同步文件路径选择集合和命令状态</summary>
+    /// <summary>根据当前可见行重新计算选择摘要</summary>
     public void RefreshSelectionSummary()
     {
         _selectedPaths.Clear();
@@ -653,27 +703,22 @@ public partial class FileExplorerViewModel(
     /// <param name="selected">是否选中所有文件</param>
     public void SetAllSelection(bool selected)
     {
-        SetSelection(_files, selected);
+        SetSelection(GetVisibleFiles(), selected);
         SynchronizeVisibleSelection();
     }
 
-    /// <summary>重新计算选择数量、全选状态，并通知相关命令更新</summary>
+    /// <summary>重新计算选择数量、全选状态,并通知相关命令更新</summary>
     private void UpdateSelectionSummary()
     {
         SelectedFileCount = _selectedPaths.Count;
-        IsAllSelected = _files.Count > 0 && _files.All(file => _selectedPaths.Contains(file.FullPath));
+        var visibleFiles = GetVisibleFiles();
+        IsAllSelected = visibleFiles.Count > 0 && visibleFiles.All(file => _selectedPaths.Contains(file.FullPath));
         CopySelectedCommand.NotifyCanExecuteChanged();
         MoveSelectedCommand.NotifyCanExecuteChanged();
         DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>供视图的拖拽框选行为调用，批量改变矩形范围内文件行的选择状态</summary>
-    /// <param name="rows">已命中选择矩形的表格行</param>
-    /// <param name="selected">要写入的选中状态</param>
-        /// <summary>按照当前筛选和展开状态重新构建分类根行及文件子行</summary>
-        /// <summary>返回指定分类的中文显示名称</summary>
-        /// <param name="category">待转换的文件分类</param>
-        /// <returns>用于文件浏览页的中文名称</returns>
+    /// <summary>供拖拽框选调用, 批量更新命中文件行的选择状态</summary>
     public void SelectRows(IEnumerable<ExplorerRow> rows, bool selected)
     {
         foreach (var row in rows.Where(row => row.File is not null))
@@ -691,28 +736,19 @@ public partial class FileExplorerViewModel(
         SynchronizeVisibleSelection();
     }
 
-    /// <summary>构建当前树行数据；万级数据时改为异步分批写入以降低主线程卡顿</summary>
+    /// <summary>异步构建当前筛选和展开状态下的树行</summary>
     private void BuildRows()
     {
         var operationVersion = ++_treeOperationVersion;
-        if (_files.Count >= 10_000)
-        {
-            IsTreeOperationInProgress = true;
-            _ = RebuildRowsAsync(operationVersion);
-            return;
-        }
-
-        IsTreeOperationInProgress = false;
-        ApplyRows(CreateRows());
+        IsTreeOperationInProgress = true;
+        _ = RebuildRowsAsync(operationVersion);
     }
 
-    /// <summary>在后台构建不可变的行快照，避免展开大量文件时占用 UI 线程</summary>
+    /// <summary>在后台构建完整树行快照</summary>
     private List<ExplorerRow> CreateRows()
     {
         var rows = new List<ExplorerRow>();
-        var visibleFiles = _searchMatchedPaths is null
-            ? _files
-            : _files.Where(file => _searchMatchedPaths.Contains(file.FullPath)).ToList();
+        var visibleFiles = GetVisibleFiles();
         var categories = _categoryFilter is { } filter ? [filter] : Enum.GetValues<FileCategory>();
         foreach (var category in categories)
         {
@@ -738,36 +774,11 @@ public partial class FileExplorerViewModel(
                 {
                     var extensionKey = GetExtensionKey(category, extensionGroup.Key);
                     var extensionFiles = extensionGroup.ToList();
-                    rows.Add(new ExplorerRow
-                    {
-                        Category = category,
-                        IsExtensionGroup = true,
-                        IsExpanded = _expandedExtensions.Contains(extensionKey),
-                        GroupExtension = extensionGroup.Key,
-                        Name = extensionGroup.Key,
-                        ChildCount = extensionFiles.Count,
-                        Size = SizeFormatter.Format(extensionFiles.Sum(file => file.Size)),
-                        IsSelected = extensionFiles.All(file => _selectedPaths.Contains(file.FullPath))
-                    });
+                    rows.Add(CreateExtensionRow(category, extensionGroup.Key, extensionFiles, _expandedExtensions.Contains(extensionKey)));
 
                     if (_expandedExtensions.Contains(extensionKey))
                     {
-                        foreach (var file in extensionFiles)
-                        {
-                            rows.Add(new ExplorerRow
-                            {
-                                Category = category,
-                                Name = file.Name,
-                                Extension = file.Extension.ToUpperInvariant(),
-                                Location = file.FullPath,
-                                Modified = file.SourceKind == StorageSourceKind.MtpDevice && file.LastModified == DateTime.MinValue
-                                    ? "未读取"
-                                    : file.LastModified.ToString("yyyy-MM-dd HH:mm"),
-                                Size = SizeFormatter.Format(file.Size),
-                                File = file,
-                                IsSelected = _selectedPaths.Contains(file.FullPath)
-                            });
-                        }
+                        rows.AddRange(extensionFiles.Select(CreateFileRow));
                     }
                 }
             }
@@ -776,7 +787,88 @@ public partial class FileExplorerViewModel(
         return rows;
     }
 
-    /// <summary>应用行快照并一次更新选择汇总</summary>
+    /// <summary>获取同时满足筛选和搜索条件的文件</summary>
+    private List<FileItem> GetVisibleFiles() => _files.Where(file =>
+        (!_showInvalidImagesOnly || file.IsInvalidImage) &&
+        (_searchMatchedPaths is null || _searchMatchedPaths.Contains(file.FullPath))).ToList();
+
+    /// <summary>仅构建当前节点的直接可见子项</summary>
+    private List<ExplorerRow> CreateDirectChildren(ExplorerRow row)
+    {
+        var files = GetVisibleFiles();
+        if (row.IsExtensionGroup)
+        {
+            return files.Where(file => file.Category == row.Category && BelongsToExtensionGroup(file, row.GroupExtension))
+                .OrderBy(file => file.Name)
+                .Select(CreateFileRow)
+                .ToList();
+        }
+
+        return files.Where(file => file.Category == row.Category)
+            .GroupBy(file => string.IsNullOrWhiteSpace(file.Extension) ? "[无扩展名]" : file.Extension.ToUpperInvariant())
+            .OrderBy(group => group.Key)
+            .SelectMany(group =>
+            {
+                var groupFiles = group.OrderBy(file => file.Name).ToList();
+                var isExpanded = _expandedExtensions.Contains(GetExtensionKey(row.Category, group.Key));
+                var children = new List<ExplorerRow> { CreateExtensionRow(row.Category, group.Key, groupFiles, isExpanded) };
+                if (isExpanded)
+                {
+                    children.AddRange(groupFiles.Select(CreateFileRow));
+                }
+
+                return children;
+            })
+            .ToList();
+    }
+
+    /// <summary>计算折叠节点时需要移除的连续子项数量</summary>
+    private int GetVisibleDescendantCount(int rowIndex, ExplorerRow row)
+    {
+        var count = 0;
+        for (var index = rowIndex + 1; index < Rows.Count; index++)
+        {
+            var candidate = Rows[index];
+            if (row.IsCategory ? candidate.IsCategory : candidate.IsCategory || candidate.IsExtensionGroup)
+            {
+                break;
+            }
+
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>创建扩展名分组行</summary>
+    private ExplorerRow CreateExtensionRow(FileCategory category, string extension, IReadOnlyCollection<FileItem> files, bool isExpanded) => new()
+    {
+        Category = category,
+        IsExtensionGroup = true,
+        IsExpanded = isExpanded,
+        GroupExtension = extension,
+        Name = extension,
+        ChildCount = files.Count,
+        Size = SizeFormatter.Format(files.Sum(file => file.Size)),
+        IsSelected = files.All(file => _selectedPaths.Contains(file.FullPath))
+    };
+
+    /// <summary>创建文件行</summary>
+    private ExplorerRow CreateFileRow(FileItem file) => new()
+    {
+        Category = file.Category,
+        Name = file.Name,
+        Extension = file.Extension.ToUpperInvariant(),
+        Location = file.FullPath,
+        Modified = file.SourceKind == StorageSourceKind.MtpDevice && file.LastModified == DateTime.MinValue
+            ? "未读取"
+            : file.LastModified.ToString("yyyy-MM-dd HH:mm"),
+        Size = SizeFormatter.Format(file.Size),
+        File = file,
+        IsSelected = _selectedPaths.Contains(file.FullPath)
+    };
+
+    /// <summary>将行集合逐项应用到界面</summary>
     private void ApplyRows(IEnumerable<ExplorerRow> rows)
     {
         Rows.Clear();
@@ -788,7 +880,7 @@ public partial class FileExplorerViewModel(
         UpdateSelectionSummary();
     }
 
-    /// <summary>后台生成行，再以小批次写入 UI 集合，避免大型展开操作冻结窗口</summary>
+    /// <summary>后台生成行快照并通过单次重置通知更新界面</summary>
     private async Task RebuildRowsAsync(int operationVersion)
     {
         try
@@ -799,22 +891,7 @@ public partial class FileExplorerViewModel(
                 return;
             }
 
-            Rows.Clear();
-            foreach (var rowBatch in rows.Chunk(250))
-            {
-                if (operationVersion != _treeOperationVersion)
-                {
-                    return;
-                }
-
-                foreach (var row in rowBatch)
-                {
-                    Rows.Add(row);
-                }
-
-                await Task.Yield();
-            }
-
+            Rows.ReplaceWith(rows);
             UpdateSelectionSummary();
         }
         finally
@@ -850,10 +927,7 @@ public partial class FileExplorerViewModel(
         }
     }
 
-    /// <summary>
-    /// 仅刷新当前已生成表格行的选择状态批量选择不再清空并重建整个树，
-    /// 避免大文件夹中触发数千次控件创建与复选框事件
-    /// </summary>
+    /// <summary>同步可见分组行与文件行的选择状态</summary>
     private void SynchronizeVisibleSelection()
     {
         var categoryTotals = new Dictionary<FileCategory, int>();
@@ -898,6 +972,7 @@ public partial class FileExplorerViewModel(
         UpdateSelectionSummary();
     }
 
+    /// <summary>返回分类的中文显示名称</summary>
     private static string GetCategoryName(FileCategory category) => category switch
     {
         FileCategory.Images => "图像",
@@ -909,22 +984,24 @@ public partial class FileExplorerViewModel(
         _ => "其他文件"
     };
 
-    /// <summary>生成可唯一定位一个扩展名分组节点的状态键</summary>
+    /// <summary>生成分类和扩展名组合键</summary>
     private static string GetExtensionKey(FileCategory category, string extension) => $"{category}|{extension}";
 
+    /// <summary>将空扩展名映射为界面分组名称</summary>
     private static string GetExtensionGroup(string extension) =>
         string.IsNullOrWhiteSpace(extension) ? "[无扩展名]" : extension.ToUpperInvariant();
 
+    /// <summary>规范化路径以便比较来源文件</summary>
     private static string NormalizeSourcePath(string path) =>
         path.Trim().Replace('/', '\\').TrimEnd('\\');
 
-    /// <summary>判断文件是否属于界面显示的扩展名分组，兼容无扩展名文件</summary>
+    /// <summary>判断文件是否属于界面显示的扩展名分组,兼容无扩展名文件</summary>
     private static bool BelongsToExtensionGroup(FileItem file, string groupExtension) =>
         string.IsNullOrWhiteSpace(file.Extension)
             ? string.Equals(groupExtension, "[无扩展名]", StringComparison.Ordinal)
             : string.Equals(file.Extension, groupExtension, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>按当前状态反选或明确设置指定文件集合的选择状态</summary>
+    /// <summary>设置指定文件集合的选择状态</summary>
     private void SetSelection(IEnumerable<FileItem> files, bool? selected = null)
     {
         var shouldSelect = selected ?? files.Any(file => !_selectedPaths.Contains(file.FullPath));

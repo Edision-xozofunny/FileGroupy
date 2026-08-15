@@ -9,26 +9,20 @@ using FileGroupy.ViewModels;
 
 namespace FileGroupy.Views;
 
-/// <summary>使用按需加载目录树选择手机扫描起点的模态窗口</summary>
 public partial class MtpFolderPickerDialog : Window, INotifyPropertyChanged
 {
     /// <summary>访问设备目录的 MTP 服务</summary>
     private readonly IMtpDeviceService _mtpDeviceService;
-    /// <summary>用户先前选择的手机设备</summary>
     private readonly MtpDeviceInfo _deviceInfo;
 
-    /// <summary>树根节点集合，正常情况下仅包含一个设备根目录</summary>
+    /// <summary>树根节点集合,正常情况下仅包含一个设备根目录</summary>
     public ObservableCollection<MtpFolderNode> RootNodes { get; } = [];
-    /// <summary>当前树中选定的文件夹节点</summary>
     public MtpFolderNode? SelectedNode { get; private set; }
-    /// <summary>供调用方使用的最终选定文件夹；未确认时为空</summary>
     public MtpFolderInfo? SelectedFolder => SelectedNode?.Folder;
-    /// <summary>当前选定目录的设备内路径文本</summary>
     public string SelectedPath => SelectedNode?.FullPath ?? "请选择文件夹";
     /// <summary>指示是否正在读取某一层 MTP 目录</summary>
     public bool IsLoading { get; private set; }
 
-    /// <summary>通知 XAML 绑定属性发生变化</summary>
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>创建针对指定设备的文件夹选择器</summary>
@@ -40,7 +34,7 @@ public partial class MtpFolderPickerDialog : Window, INotifyPropertyChanged
         DataContext = this;
     }
 
-    /// <summary>首次显示时预加载根目录下的存储容器，不递归遍历整台手机</summary>
+    /// <summary>首次显示时预加载根目录下的存储容器,不递归遍历整台手机</summary>
     private async void Window_OnLoaded(object sender, RoutedEventArgs e)
     {
         try
@@ -66,7 +60,6 @@ public partial class MtpFolderPickerDialog : Window, INotifyPropertyChanged
         }
     }
 
-    /// <summary>仅在用户展开一个未读取节点时访问该节点的直属子目录</summary>
     private async void FolderTree_OnExpanded(object sender, RoutedEventArgs e)
     {
         if (e.OriginalSource is not TreeViewItem { DataContext: MtpFolderNode node } || node.IsLoaded)
@@ -89,14 +82,12 @@ public partial class MtpFolderPickerDialog : Window, INotifyPropertyChanged
         }
     }
 
-    /// <summary>同步用户的树选择到确认按钮旁边的路径提示</summary>
     private void FolderTree_OnSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         SelectedNode = e.NewValue as MtpFolderNode;
         NotifyPropertyChanged(nameof(SelectedPath));
     }
 
-    /// <summary>确认当前选中目录为扫描根目录</summary>
     private void ScanButton_OnClick(object sender, RoutedEventArgs e)
     {
         if (SelectedNode is not null)
@@ -112,7 +103,7 @@ public partial class MtpFolderPickerDialog : Window, INotifyPropertyChanged
         NotifyPropertyChanged(nameof(IsLoading));
     }
 
-    /// <summary>读取一个目录的直属子目录，并为每一项建立惰性展开占位节点</summary>
+    /// <summary>读取一个目录的直属子目录,并为每一项建立惰性展开占位节点</summary>
     private async Task LoadChildrenAsync(MtpFolderNode node)
     {
         var folders = await _mtpDeviceService.GetChildFoldersAsync(_deviceInfo, node.FullPath);
@@ -125,7 +116,6 @@ public partial class MtpFolderPickerDialog : Window, INotifyPropertyChanged
         node.IsLoaded = true;
     }
 
-    /// <summary>创建目录节点，并用隐藏占位项让尚未读取的节点显示展开控件</summary>
     private static MtpFolderNode CreateFolderNode(MtpFolderInfo folder)
     {
         var node = new MtpFolderNode(folder);

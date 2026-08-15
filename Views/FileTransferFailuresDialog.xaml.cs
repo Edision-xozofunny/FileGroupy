@@ -5,7 +5,6 @@ using FileGroupy.Models;
 
 namespace FileGroupy.Views;
 
-/// <summary>显示单次传输中失败文件的结构化明细，并支持导出 CSV</summary>
 public partial class FileTransferFailuresDialog : System.Windows.Window
 {
     /// <summary>本次任务的失败记录快照</summary>
@@ -19,7 +18,6 @@ public partial class FileTransferFailuresDialog : System.Windows.Window
         DataContext = this;
     }
 
-    /// <summary>将当前失败记录写成 UTF-8 BOM CSV，便于 Excel 直接识别中文</summary>
     private void ExportCsvButton_OnClick(object sender, System.Windows.RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

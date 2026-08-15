@@ -1,16 +1,12 @@
 namespace FileGroupy.Models;
 
-/// <summary>集中维护本地与便携设备扫描共用的文件扩展名分类规则</summary>
 public static class FileCategoryCatalog
 {
-    /// <summary>按扩展名快速查询文件分类，键比较忽略大小写</summary>
     public static IReadOnlyDictionary<string, FileCategory> ExtensionCategories { get; } = CreateExtensionCategories();
 
-    /// <summary>根据扩展名返回内置分类；未知类型归入其他文件</summary>
     public static FileCategory GetCategory(string extension) =>
         ExtensionCategories.TryGetValue(extension, out var category) ? category : FileCategory.Other;
 
-    /// <summary>返回用于界面展示的文件类型文本；原始扩展名不参与转换</summary>
     public static string GetDisplayName(string extension)
     {
         if (string.IsNullOrWhiteSpace(extension))

@@ -4,36 +4,13 @@ using FileGroupy.Models;
 
 namespace FileGroupy.Services;
 
-/// <summary>并发执行独立文件操作；并行度受到限制，以平衡磁盘吞吐与文件句柄竞争</summary>
 public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IFileTransferService
 {
-    /// <summary>单个复制流的缓冲区大小，1 MiB 可减少大文件复制的系统调用次数</summary>
     private const int BufferSize = 1024 * 1024;
-    /// <summary>为并行本地传输分配同名后缀时防止线程同时选择同一个目标名称</summary>
     private static readonly object DuplicateNameLock = new();
-    /// <summary>同时运行的最大文件任务数，按 CPU 核数估算并限制在合理范围</summary>
+    /// <summary>同时运行的最大文件任务数,按 CPU 核数估算并限制在合理范围</summary>
     private readonly int _maxParallelism = Math.Clamp(Environment.ProcessorCount * 2, 2, 8);
 
-    /// <inheritdoc />
-    /// <summary>执行一个文件任务，并根据冲突策略复制、移动或跳过该文件</summary>
-    /// <param name="sourcePath">源文件绝对路径</param>
-    /// <param name="destinationPath">目标文件绝对路径</param>
-    /// <param name="options">批量传输策略</param>
-    /// <param name="cancellationToken">异步复制的取消标记</param>
-    /// <returns>当前文件是否成功或被跳过</returns>
-    /// <summary>通过异步流以顺序扫描方式复制一个文件</summary>
-    /// <param name="sourcePath">源文件绝对路径</param>
-    /// <param name="destinationPath">尚不存在的目标文件绝对路径</param>
-    /// <param name="cancellationToken">异步读取和写入的取消标记</param>
-    /// <summary>按是否保留目录结构生成某源文件的目标路径</summary>
-    /// <param name="file">源文件元数据</param>
-    /// <param name="destinationRoot">用户选择的目标根目录</param>
-    /// <param name="sourceRoot">全部源文件的共同父目录</param>
-    /// <param name="preserveStructure">是否保留共同父目录下的相对路径</param>
-    /// <returns>目标文件绝对路径</returns>
-    /// <summary>查找多个文件所在目录的最长共同父目录</summary>
-    /// <param name="paths">源文件绝对路径集合</param>
-    /// <returns>共同父目录；无可用路径时为空字符串</returns>
     public async Task<FileTransferResult> TransferAsync(
         IReadOnlyCollection<FileItem> sourceFiles,
         FileTransferOptions options,
@@ -145,9 +122,6 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         var successfulSourcePaths = new List<string>();
         var successfulTransfers = new List<FileTransferSuccess>();
 
-        /// <summary>将分批删除结果汇总到统一统计，并上报聚合进度</summary>
-        /// <param name="result">单批删除结果</param>
-        /// <param name="batchFiles">该批次实际处理的源文件集合</param>
         void MergeResult(FileTransferResult result, IReadOnlyCollection<FileItem> batchFiles)
         {
             succeeded += result.Succeeded;
@@ -175,10 +149,6 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         return new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths, successfulTransfers);
     }
 
-    /// <summary>批量删除本地文件并记录成功与失败明细</summary>
-    /// <param name="sourceFiles">待删除本地文件集合</param>
-    /// <param name="cancellationToken">用于终止批量删除的取消标记</param>
-    /// <returns>本地删除结果</returns>
     private static Task<FileTransferResult> DeleteLocalAsync(IReadOnlyCollection<FileItem> sourceFiles, CancellationToken cancellationToken)
     {
         var succeeded = 0;
@@ -268,7 +238,6 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         return TransferOutcome.Succeeded;
     }
 
-    /// <summary>为扁平复制生成“名称 (1).扩展名”形式的可用目标名，并处理并行任务竞争</summary>
     private static async Task<TransferOutcome> TransferWithRenamedDestinationAsync(
         string sourcePath,
         string destinationPath,
@@ -304,12 +273,11 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
             }
             catch (IOException) when (File.Exists(candidate))
             {
-                // 另一并行任务恰好保留了相同候选名，继续寻找下一个后缀
+                // 另一并行任务恰好保留了相同候选名,继续寻找下一个后缀
             }
         }
     }
 
-    /// <summary>返回首次不存在的本地候选路径；零表示原文件名</summary>
     private static string GetAvailableLocalPath(string path, int minimumSuffix)
     {
         if (minimumSuffix == 0 && !File.Exists(path))
@@ -377,12 +345,10 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         return common;
     }
 
-    /// <summary>单文件传输的内部结果，用于累计批处理统计</summary>
     private enum TransferOutcome
     {
         /// <summary>文件已成功复制或移动</summary>
         Succeeded,
-        /// <summary>文件因策略或路径相同而未执行操作</summary>
         Skipped
     }
 }
