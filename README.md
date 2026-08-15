@@ -14,3 +14,27 @@
 
 ---
 
+Optimize file scanning and enhance file explorer experience
+
+## Summary
+
+优化本地磁盘和可移动磁盘的扫描性能，并完善文件浏览页、图片校验、设备识别及 HandyControl UI 交互。
+
+## Changes
+
+- 使用单线程目录枚举和有界 `Channel`，避免扫描过程中无限堆积文件对象。
+- 使用有限并发处理文件元数据，降低磁盘和可移动设备的 I/O 压力。
+- 将无效图像检测改为按需延迟校验。
+- 使用有限并发验证图片文件。
+- 排除 SVG 的位图解码校验，避免将矢量图误判为无效图片。
+- 修复部分可移动磁盘被识别为 PTP 设备的问题。
+- 保留 iPhone PTP 设备支持。
+- 使用 HandyControl 优化 `Card`、`Badge`、`Drawer` 和 `Growl` 相关界面。
+- 文件详情改为右键菜单打开的固定宽度抽屉。
+- 详情抽屉中的长文件名、类型和路径支持换行。
+- 点击抽屉外部区域自动收起，抽屉内部内容仍可复制。
+- 补充关键代码和 XAML 的中文注释。
+
+## Validation
+
+- `dotnet build FileGroupy.csproj /property:UseAppHost=false`

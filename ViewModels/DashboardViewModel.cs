@@ -264,13 +264,13 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
 
     private static string GetCategoryIcon(FileCategory category) => category switch
     {
-        FileCategory.Images => "图",
-        FileCategory.Audio => "音",
-        FileCategory.Video => "影",
-        FileCategory.Office => "文档",
-        FileCategory.Archives => "包",
-        FileCategory.SourceCode => "代码",
-        _ => "他"
+        FileCategory.Images => "\uE8B4",
+        FileCategory.Audio => "\uE90B",
+        FileCategory.Video => "\uE714",
+        FileCategory.Office => "\uE8A5",
+        FileCategory.Archives => "\uE8B7",
+        FileCategory.SourceCode => "\uE943",
+        _ => "\uE8A4"
     };
 
     /// <summary>提供设备扫描来源的协议标识</summary>

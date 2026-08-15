@@ -160,6 +160,7 @@
                                 <DataTemplate>
                                     <Button Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Style="{StaticResource ExplorerTreeItemButton}">
                                         <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource ExplorerRowIcon}" />
                                             <TextBlock Text="{Binding DisplayName}" Style="{StaticResource ExplorerTreeItemText}" />
                                         </StackPanel>
                                     </Button>
@@ -211,12 +212,21 @@
                             </Grid.RowDefinitions>
                             <TextBox Text="{Binding SelectedRow.Name, Mode=OneWay}" Width="244" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
                             <TextBox Grid.Row="1" Text="{Binding SelectedRow.TypeDisplayName, Mode=OneWay}" Width="244" Margin="0,8,0,18" Foreground="{StaticResource AccentBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
-                            <TextBlock Grid.Row="2" Text="大小" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" />
+                            <StackPanel Grid.Row="2" Orientation="Horizontal">
+                                <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,6,0" />
+                                <TextBlock Text="大小" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" />
+                            </StackPanel>
                             <TextBox Grid.Row="3" Text="{Binding SelectedRow.Size, Mode=OneWay}" Width="244" Margin="0,3,0,14" Foreground="{StaticResource TextPrimaryBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
-                            <TextBlock Grid.Row="4" Text="修改时间" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" />
+                            <StackPanel Grid.Row="4" Orientation="Horizontal">
+                                <TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,6,0" />
+                                <TextBlock Text="修改时间" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" />
+                            </StackPanel>
                             <StackPanel Grid.Row="5" Margin="0,3,0,14">
                                 <TextBox Text="{Binding SelectedRow.Modified, Mode=OneWay}" Width="244" Foreground="{StaticResource TextPrimaryBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
-                                <TextBlock Text="位置" Margin="0,14,0,3" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" />
+                                <StackPanel Orientation="Horizontal" Margin="0,14,0,3">
+                                    <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,6,0" />
+                                    <TextBlock Text="位置" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" />
+                                </StackPanel>
                                 <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                     <TextBox Text="{Binding SelectedRow.Location, Mode=OneWay}" Width="244" Foreground="{StaticResource TextPrimaryBrush}" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" />
                                 </ScrollViewer>

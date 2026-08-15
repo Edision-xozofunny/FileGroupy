@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:hc="https://handyorg.github.io/handycontrol"
-        Title="批量删除文件" Width="680" SizeToContent="Height" WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="True" Background="#F6F8FC">
+        Title="批量删除文件" Width="680" SizeToContent="Height" WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="True" Background="{StaticResource PageBackgroundBrush}" FontFamily="Microsoft YaHei UI" FontSize="13">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </Window.Resources>
@@ -23,13 +23,18 @@
         <hc:Card Grid.Row="1" Header="删除说明" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="18" Margin="0,20,0,16">
             <TextBlock Text="将尝试删除所选中的全部文件再次点击“开始删除”时，已被移动或删除的文件会记录为失败，可在“查看失败详情”中查看" TextWrapping="Wrap" Foreground="#475467" />
         </hc:Card>
-        <ProgressBar Grid.Row="2" Height="8" Maximum="100" Value="{Binding ProgressPercent}" Foreground="#D92D20" Background="{StaticResource SurfaceMutedBrush}" Margin="0,2,0,10" />
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,20">
-            <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" Foreground="#667085" FontSize="12" VerticalAlignment="Center" />
+        <Grid Grid.Row="2" Margin="0,2,0,12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <ProgressBar Height="20" Maximum="100" Value="{Binding ProgressPercent}" Foreground="#D92D20" Background="{StaticResource SurfaceMutedBrush}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding ProgressPercent, StringFormat={}{0:0}%}" Width="54" Margin="12,0,0,0" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+        </Grid>
+        <Grid Grid.Row="3" Margin="0,0,0,22">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="13" VerticalAlignment="Center" />
             <hc:Badge Value="{Binding Failures.Count}" Maximum="999999" Margin="10,0,0,0" Visibility="{Binding HasFailures, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Button Command="{Binding ShowFailuresCommand}" Content="查看失败详情" Foreground="#B42318" Padding="8,2" />
             </hc:Badge>
-        </StackPanel>
+        </Grid>
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Command="{Binding CancelCommand}" Content="取消" Style="{StaticResource NeutralButton}" Margin="0,0,10,0" />
             <Button Command="{Binding StartDeleteCommand}" Content="开始删除" Style="{StaticResource DangerButton}" />

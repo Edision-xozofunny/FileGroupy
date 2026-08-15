@@ -63,7 +63,7 @@
                 <hc:Card Width="210" Height="136" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="17">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="42" Height="36" Background="{StaticResource AccentSoftBrush}" CornerRadius="6"><TextBlock Text="{Binding Icon}" Foreground="{StaticResource AccentBrush}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                    <Border Width="42" Height="42" Background="{StaticResource AccentSoftBrush}" CornerRadius="8"><TextBlock Text="{Binding Icon}" FontFamily="Segoe MDL2 Assets" FontSize="20" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
                     <StackPanel Grid.Column="1" Margin="11,0,0,0"><TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" /><TextBlock Text="点击查看文件明细" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" Margin="0,7,0,0" /></StackPanel>
                     <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SizeText}" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Bottom" />
                   </Grid>

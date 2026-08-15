@@ -2,16 +2,17 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:hc="https://handyorg.github.io/handycontrol"
-        Title="传输失败详情" Width="1040" Height="620" MinWidth="760" MinHeight="420" WindowStartupLocation="CenterOwner" Background="#F6F8FC">
+        Title="传输失败详情" Width="1040" Height="620" MinWidth="760" MinHeight="420" WindowStartupLocation="CenterOwner" ShowInTaskbar="True" Background="{StaticResource PageBackgroundBrush}" FontFamily="Microsoft YaHei UI" FontSize="13">
   <Grid Margin="24">
     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
     <StackPanel>
-      <TextBlock Text="传输失败详情" FontSize="22" FontWeight="SemiBold" Foreground="#182230" />
-      <TextBlock Text="仅保留本次复制或移动任务中的失败记录" Margin="0,6,0,18" Foreground="#667085" />
+      <TextBlock Text="传输失败详情" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+      <TextBlock Text="仅保留本次复制或移动任务中的失败记录" Margin="0,7,0,20" Foreground="{StaticResource TextSecondaryBrush}" />
     </StackPanel>
-    <DataGrid Grid.Row="1" ItemsSource="{Binding Failures}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" RowHeaderWidth="0" BorderBrush="#D0D5DD" Background="White" FrozenColumnCount="2"
-          hc:DataGridAttach.ShowRowNumber="True"
-              ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True">
+    <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="4">
+    <DataGrid ItemsSource="{Binding Failures}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" RowHeaderWidth="0" BorderThickness="0" Background="Transparent" FrozenColumnCount="2"
+        hc:DataGridAttach.ShowRowNumber="True"
+          ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True">
       <DataGrid.Columns>
         <DataGridTextColumn Header="文件" Binding="{Binding FileName}" Width="160" />
         <DataGridTextColumn Header="来源" Binding="{Binding SourceKind}" Width="90" />
@@ -21,9 +22,10 @@
         <DataGridTextColumn Header="失败原因" Binding="{Binding Reason}" Width="420" />
       </DataGrid.Columns>
     </DataGrid>
-    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-      <Button Content="导出 CSV" Click="ExportCsvButton_OnClick" Background="#EAF2FF" Foreground="#175CD3" Margin="0,0,10,0" />
-      <Button Content="关闭" IsCancel="True" Background="#1677FF" Foreground="White" />
+    </Border>
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+      <Button Content="导出 CSV" Click="ExportCsvButton_OnClick" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0" />
+      <Button Content="关闭" IsCancel="True" Style="{StaticResource PrimaryButton}" />
     </StackPanel>
   </Grid>
 </Window>
