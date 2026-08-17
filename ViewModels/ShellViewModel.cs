@@ -12,10 +12,10 @@ public partial class ShellViewModel : ObservableObject
 
     [ObservableProperty] private ObservableObject _currentViewModel;
 
-    /// <summary>概览导航项是否为当前页面</summary>
-    public bool IsDashboardActive => CurrentViewModel == Dashboard;
-    /// <summary>文件浏览导航项是否为当前页面</summary>
-    public bool IsExplorerActive => CurrentViewModel == Explorer;
+    /// <summary>概览导航项是否显示活动指示条</summary>
+    [ObservableProperty] private bool _isDashboardActive;
+    /// <summary>文件浏览导航项是否显示活动指示条</summary>
+    [ObservableProperty] private bool _isExplorerActive;
 
     public ShellViewModel(DashboardViewModel dashboard, FileExplorerViewModel explorer)
     {
@@ -30,22 +30,30 @@ public partial class ShellViewModel : ObservableObject
         {
             Explorer.ShowCategory(category);
             CurrentViewModel = Explorer;
+            SelectExplorerNavigation();
         };
     }
 
     [RelayCommand]
-    private void ShowDashboard() => CurrentViewModel = Dashboard;
+    private void ShowDashboard()
+    {
+        CurrentViewModel = Dashboard;
+        IsDashboardActive = !IsDashboardActive;
+        IsExplorerActive = false;
+    }
 
     [RelayCommand]
     private void ShowExplorer()
     {
         Explorer.ShowAll();
         CurrentViewModel = Explorer;
+        SelectExplorerNavigation();
     }
 
-    partial void OnCurrentViewModelChanged(ObservableObject value)
+    /// <summary>选择文件浏览导航项, 再次点击同一项时隐藏活动指示条</summary>
+    private void SelectExplorerNavigation()
     {
-        OnPropertyChanged(nameof(IsDashboardActive));
-        OnPropertyChanged(nameof(IsExplorerActive));
+        IsExplorerActive = !IsExplorerActive;
+        IsDashboardActive = false;
     }
 }

@@ -1,5 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- 所有后续合并主题都会使用此字体资源, 必须定义在主题链最前端. -->
+  <FontFamily x:Key="AppFontFamily">Segoe UI</FontFamily>
   <SolidColorBrush x:Key="AccentBrush" Color="#1677FF" />
   <SolidColorBrush x:Key="PageBackgroundBrush" Color="#F6F8FC" />
   <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />

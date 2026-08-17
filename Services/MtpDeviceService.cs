@@ -135,8 +135,70 @@ public sealed class MtpDeviceService : IMtpDeviceService
     }
 
     /// <inheritdoc />
+    public Task<IReadOnlySet<string>> FindInvalidImagePathsAsync(
+        IReadOnlyCollection<FileItem> files,
+        CancellationToken cancellationToken = default) =>
+        Task.Run(() => FindInvalidImagePaths(files, cancellationToken), cancellationToken);
+
+    /// <inheritdoc />
     public Task<string> DownloadPreviewFileAsync(FileItem file, CancellationToken cancellationToken = default) =>
         Task.Run(() => DownloadPreviewFile(file, cancellationToken), cancellationToken);
+
+    /// <summary>按设备顺序下载并快速验证图像, 防止多会话并发导致 MTP/PTP 设备断连</summary>
+    private static IReadOnlySet<string> FindInvalidImagePaths(IReadOnlyCollection<FileItem> files, CancellationToken cancellationToken)
+    {
+        var invalidPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var deviceGroups = files.Where(file => file.SourceKind == StorageSourceKind.MtpDevice
+                                               && file.Category == FileCategory.Images
+                                               && !ImageValidation.IsSvg(file.Extension)
+                                       && !string.IsNullOrWhiteSpace(file.SourceId))
+                                .GroupBy(file => file.SourceId!, StringComparer.Ordinal);
+
+        foreach (var deviceGroup in deviceGroups)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var device = MediaDevice.GetDevices().FirstOrDefault(candidate => candidate.DeviceId == deviceGroup.Key);
+            if (device is null)
+            {
+                continue;
+            }
+
+            device.Connect();
+            try
+            {
+                foreach (var file in deviceGroup)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        // DeleteOnClose 避免大图常驻临时目录, 单会话也避免每张图重复握手.
+                        using var stream = new FileStream(Path.GetTempFileName(), FileMode.Open, FileAccess.ReadWrite,
+                            FileShare.None, 256 * 1024, FileOptions.SequentialScan | FileOptions.DeleteOnClose);
+                        device.DownloadFile(file.FullPath, stream);
+                        stream.Position = 0;
+                        if (!ImageValidation.CanReadRasterImage(stream))
+                        {
+                            invalidPaths.Add(file.FullPath);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception)
+                    {
+                        // 传输失败通常来自连接或权限问题, 不将其错误标注为损坏图像.
+                    }
+                }
+            }
+            finally
+            {
+                device.Disconnect();
+            }
+        }
+
+        return invalidPaths;
+    }
 
     private static FolderScanResult Scan(MtpDeviceInfo deviceInfo, string rootPath, IProgress<FileScanProgress>? progress, CancellationToken cancellationToken)
     {

@@ -31,7 +31,7 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         DataContextChanged += FileExplorerView_OnDataContextChanged;
     }
 
-    /// <summary>订阅当前视图模型, 将文件操作结果显示为全局轻提示</summary>
+    /// <summary>订阅当前视图模型, 将文件操作结果显示为主窗口内轻提示</summary>
     private void FileExplorerView_OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (_viewModel is not null)
@@ -46,12 +46,19 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         }
     }
 
-    /// <summary>文件操作状态更新后使用 HandyControl Growl 展示结果</summary>
+    /// <summary>文件操作状态更新后使用主窗口内 Growl 展示成功或部分失败结果</summary>
     private void ViewModel_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(FileExplorerViewModel.OperationStatus) && !string.IsNullOrWhiteSpace(_viewModel?.OperationStatus))
         {
-            Growl.SuccessGlobal(_viewModel.OperationStatus);
+            if (_viewModel.OperationStatus.Contains("失败 0", StringComparison.Ordinal))
+            {
+                Growl.Success(_viewModel.OperationStatus, "MainWindowGrowl");
+            }
+            else
+            {
+                Growl.Warning(_viewModel.OperationStatus, "MainWindowGrowl");
+            }
         }
     }
 

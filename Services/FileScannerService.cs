@@ -1,7 +1,6 @@
 using System.IO;
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using System.Windows.Media.Imaging;
 using FileGroupy.Models;
 
 namespace FileGroupy.Services;
@@ -116,7 +115,7 @@ public sealed class FileScannerService : IFileScannerService
         // SVG 是矢量格式, WPF BitmapDecoder 不负责解析 SVG, 因此必须明确排除.
         var localRasterImages = files.Where(file => file.SourceKind == StorageSourceKind.LocalFileSystem
                                                     && file.Category == FileCategory.Images
-                                                    && !IsSvg(file.Extension))
+                                && !ImageValidation.IsSvg(file.Extension))
                                      .ToArray();
         var parallelOptions = new ParallelOptions
         {
@@ -142,14 +141,14 @@ public sealed class FileScannerService : IFileScannerService
         progress?.Report(new FileScanProgress(folders, files, bytes, new Dictionary<FileCategory, CategoryScanSummary>(categories)));
     }
 
-    /// <summary>验证图像是否可由 WPF 解码, 损坏图像仍会保留在扫描结果中</summary>
+    /// <summary>使用顺序读取和延迟像素加载快速验证本地图像头</summary>
     private static bool CanDecodeImage(string path)
     {
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            _ = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-            return true;
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                64 * 1024, FileOptions.SequentialScan);
+            return ImageValidation.CanReadRasterImage(stream);
         }
         catch (Exception)
         {
@@ -168,8 +167,5 @@ public sealed class FileScannerService : IFileScannerService
     /// <summary>图像解码并发度对移动设备和网络位置保持保守</summary>
     private static int GetImageValidationConcurrency(string? path) =>
         !string.IsNullOrWhiteSpace(path) && GetFileProcessingConcurrency(path) > 2 ? 4 : 2;
-
-    /// <summary>SVG 是矢量图, 不交给 WPF 位图解码器验证</summary>
-    private static bool IsSvg(string extension) => string.Equals(extension, ".svg", StringComparison.OrdinalIgnoreCase);
 
 }

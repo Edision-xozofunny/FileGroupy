@@ -9,6 +9,13 @@
       <Setter Property="Margin" Value="0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <ContentPresenter />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
   </UserControl.Resources>
   <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -20,6 +27,7 @@
       <hc:Card Style="{StaticResource AccentCard}" Padding="20">
         <StackPanel>
           <TextBlock Text="扫描来源" FontFamily="{StaticResource AppFontFamily}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,10" />
+          <Border Style="{StaticResource CardContentPanel}">
           <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
           <StackPanel>
@@ -35,6 +43,7 @@
             <TextBlock Text="选择文件夹" FontWeight="SemiBold" />
           </Button>
           </Grid>
+          </Border>
         </StackPanel>
       </hc:Card>
 
@@ -61,16 +70,16 @@
         <ItemsControl.ItemTemplate>
           <DataTemplate>
             <!-- Badge 显示精确文件数量, Maximum 避免默认 99+ 截断. -->
-            <hc:Badge Value="{Binding FileCount}" Maximum="999999" Margin="0,0,14,14">
+            <hc:Badge Style="{StaticResource CategoryCountBadge}" Value="{Binding FileCount}" Maximum="999999" Margin="0,0,14,14">
               <Button Style="{StaticResource CategoryCardButton}" Command="{Binding DataContext.OpenCategoryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding Category}">
-                <hc:Card Width="210" Height="136" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="17">
+                <Border Width="210" Height="136" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="16">
                   <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="42" Height="42" Background="{StaticResource AccentSoftBrush}" CornerRadius="8"><TextBlock Text="{Binding Icon}" FontFamily="Segoe MDL2 Assets" FontSize="20" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
-                    <StackPanel Grid.Column="1" Margin="11,0,0,0"><TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" /><TextBlock Text="点击查看文件明细" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" Margin="0,7,0,0" /></StackPanel>
-                    <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SizeText}" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Bottom" />
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Border Width="32" Height="32" Background="{StaticResource AccentSoftBrush}" CornerRadius="8" HorizontalAlignment="Left" VerticalAlignment="Top"><TextBlock Text="{Binding Icon}" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                    <StackPanel Grid.Row="1" Margin="0,10,0,0"><TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" /><TextBlock Text="点击查看文件明细" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" Margin="0,5,0,0" /></StackPanel>
+                    <TextBlock Grid.Row="2" Text="{Binding SizeText}" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Bottom" />
                   </Grid>
-                </hc:Card>
+                </Border>
               </Button>
             </hc:Badge>
           </DataTemplate>

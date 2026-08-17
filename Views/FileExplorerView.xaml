@@ -3,41 +3,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:FileGroupy.Controls"
              xmlns:hc="https://handyorg.github.io/handycontrol">
-    <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
-        <Style x:Key="FilterToggleSwitch" TargetType="ToggleButton">
-            <Setter Property="Background" Value="{StaticResource SurfaceMutedBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="10,5" />
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="ToggleBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7" Padding="{TemplateBinding Padding}">
-                            <StackPanel Orientation="Horizontal">
-                                <Border x:Name="Track" Width="28" Height="16" Background="#98A2B3" CornerRadius="8" Margin="0,0,7,0">
-                                    <Ellipse x:Name="Thumb" Width="12" Height="12" Fill="White" Margin="2" HorizontalAlignment="Left" />
-                                </Border>
-                                <ContentPresenter VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="ToggleBorder" Property="Background" Value="{StaticResource AccentSoftBrush}" />
-                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-                                <Setter TargetName="Track" Property="Background" Value="{StaticResource AccentBrush}" />
-                                <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </UserControl.Resources>
     <Grid Margin="48,42,48,48" Loaded="ExplorerRoot_OnLoaded" Unloaded="ExplorerRoot_OnUnloaded">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -62,14 +27,19 @@
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" Command="{Binding ClearSelectionCommand}" Content="取消全选" Style="{StaticResource NeutralButton}" Padding="16,7" />
             <TextBlock Grid.Column="1" Text="树形层级" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" FontWeight="SemiBold" Margin="20,0,10,0" />
-            <TextBox x:Name="SearchBox" Grid.Column="2" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Height="32" Margin="0,0,10,0" VerticalContentAlignment="Center" ToolTip="按 Ctrl+F 搜索文件" />
-            <Button Grid.Column="3" Click="SearchButton_OnClick" Content="搜索" Style="{StaticResource SecondaryButton}" Padding="16,7" />
+            <Grid Grid.Column="2" Height="34" Margin="0,0,10,0">
+                <hc:SearchBar x:Name="SearchBox" Style="{StaticResource ExplorerSearchBar}" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" IsRealTime="True" Padding="10,0,34,0" VerticalContentAlignment="Center" ToolTip="按 Ctrl+F 搜索文件名，支持空格分词和缩写匹配" />
+                <Button Command="{Binding ClearSearchCommand}" Style="{StaticResource SearchClearButton}" HorizontalAlignment="Right" VerticalAlignment="Center" ToolTip="清空搜索">
+                    <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+            </Grid>
+            <TextBlock Grid.Column="3" Text="{Binding SearchResultText}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0" />
             <ComboBox Grid.Column="4" ItemsSource="{Binding ExpansionLevels}" SelectedItem="{Binding SelectedExpansionLevel}" Width="78" Height="32" Margin="10,0,10,0" VerticalContentAlignment="Center" />
             <Button Grid.Column="5" Command="{Binding ExpandToLevelCommand}" Content="展开" Style="{StaticResource SecondaryButton}" Padding="16,7" />
             <Button Grid.Column="6" Command="{Binding CollapseAllCommand}" Content="收缩" Style="{StaticResource NeutralButton}" Padding="16,7" Margin="8,0,0,0" />
             <Button Grid.Column="7" Command="{Binding RefreshCurrentCommand}" Content="刷新" Style="{StaticResource SecondaryButton}" Padding="16,7" Margin="8,0,0,0" />
             <!-- 首次点击在后台校验, 校验完成后显示包含 0 在内的精确数量. -->
-            <hc:Badge Grid.Column="8" Value="{Binding InvalidImageCount}" Maximum="999999" ShowBadge="{Binding HasInvalidImageValidation}" Margin="8,0,0,0" VerticalAlignment="Center">
+            <hc:Badge Grid.Column="8" Style="{StaticResource CountBadge}" Value="{Binding InvalidImageCount}" Maximum="999999" ShowBadge="{Binding HasInvalidImageValidation}" Margin="8,0,0,0" VerticalAlignment="Center">
                 <ToggleButton Command="{Binding ToggleInvalidImagesFilterCommand}" IsChecked="{Binding IsInvalidImagesFilterActive, Mode=OneWay}" Content="{Binding InvalidImageFilterText}" Style="{StaticResource FilterToggleSwitch}" />
             </hc:Badge>
         </Grid>
@@ -95,7 +65,7 @@
                 <ItemsControl ItemsSource="{Binding StickyItems, ElementName=FilesGrid}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Grid Height="{StaticResource ExplorerStickyRowHeight}">
+                            <Grid Height="34">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="44" />
                                     <ColumnDefinition Width="*" />

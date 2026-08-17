@@ -82,6 +82,12 @@ public partial class FileExplorerViewModel(
     public bool IsInvalidImagesFilterActive => _showInvalidImagesOnly;
     /// <summary>无效图像按钮在校验前后的提示文本</summary>
     public string InvalidImageFilterText => HasInvalidImageValidation ? "无效图像" : "无效图像 (点击检测)";
+    /// <summary>当前搜索结果的数量提示</summary>
+    public string SearchResultText => string.IsNullOrWhiteSpace(SearchQuery)
+        ? string.Empty
+        : $"匹配 {_searchMatchedPaths?.Count ?? 0:N0} 个文件";
+    /// <summary>是否存在可清空的搜索关键字</summary>
+    public bool HasSearchQuery => !string.IsNullOrWhiteSpace(SearchQuery);
 
     /// <summary>文件集合发生增删改后触发</summary>
     public event EventHandler<FolderScanResult>? FilesChanged;
@@ -208,12 +214,6 @@ public partial class FileExplorerViewModel(
             return;
         }
 
-        if (!_isLocalScan)
-        {
-            OperationStatus = "无效图像校验仅支持本地磁盘和可移动磁盘";
-            return;
-        }
-
         _invalidImageValidationCancellationTokenSource?.Cancel();
         _invalidImageValidationCancellationTokenSource?.Dispose();
         _invalidImageValidationCancellationTokenSource = new CancellationTokenSource();
@@ -222,18 +222,23 @@ public partial class FileExplorerViewModel(
         _showInvalidImagesOnly = !_showInvalidImagesOnly;
         OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
         Title = "无效图像";
-        Subtitle = "正在验证本地图像文件...";
+        Subtitle = "正在验证图像文件...";
 
         try
         {
             // 快照避免后台校验期间受界面筛选或文件操作影响.
-            var imageFiles = _files.Where(file => file.Category == FileCategory.Images && file.SourceKind == StorageSourceKind.LocalFileSystem).ToArray();
-            var invalidPaths = await scanner.FindInvalidImagePathsAsync(imageFiles, cancellationToken);
+            var imageFiles = _files.Where(file => file.Category == FileCategory.Images).ToArray();
+            var localImages = imageFiles.Where(file => file.SourceKind == StorageSourceKind.LocalFileSystem).ToArray();
+            var deviceImages = imageFiles.Where(file => file.SourceKind == StorageSourceKind.MtpDevice).ToArray();
+            var localTask = scanner.FindInvalidImagePathsAsync(localImages, cancellationToken);
+            var deviceTask = mtpDeviceService.FindInvalidImagePathsAsync(deviceImages, cancellationToken);
+            await Task.WhenAll(localTask, deviceTask);
             cancellationToken.ThrowIfCancellationRequested();
+            var invalidPaths = localTask.Result.Concat(deviceTask.Result).ToHashSet(StringComparer.OrdinalIgnoreCase);
             for (var index = 0; index < _files.Count; index++)
             {
                 var file = _files[index];
-                if (file.Category == FileCategory.Images && file.SourceKind == StorageSourceKind.LocalFileSystem)
+                if (file.Category == FileCategory.Images)
                 {
                     _files[index] = file with { IsInvalidImage = invalidPaths.Contains(file.FullPath) };
                 }
@@ -241,7 +246,7 @@ public partial class FileExplorerViewModel(
 
             OnPropertyChanged(nameof(InvalidImageCount));
             HasInvalidImageValidation = true;
-            Subtitle = $"已验证 {imageFiles.Length:N0} 个本地图像, 发现 {InvalidImageCount:N0} 个无法解码文件";
+            Subtitle = $"已验证 {imageFiles.Length:N0} 个图像, 发现 {InvalidImageCount:N0} 个无法解码文件";
             // 校验完成后一次性重建行集合, 避免每个坏图逐条触发 UI 更新.
             await RebuildRowsAsync(++_treeOperationVersion);
         }
@@ -679,7 +684,16 @@ public partial class FileExplorerViewModel(
         FilesChanged?.Invoke(this, new FolderScanResult(_currentScanPath, _currentFolderCount, _files.ToList(), _currentSkippedItemCount));
     }
 
-    partial void OnSearchQueryChanged(string value) => _ = ApplySearchAsync(value);
+    partial void OnSearchQueryChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasSearchQuery));
+        OnPropertyChanged(nameof(SearchResultText));
+        _ = ApplySearchAsync(value);
+    }
+
+    /// <summary>清除搜索关键字并恢复当前分类下的全部文件</summary>
+    [RelayCommand]
+    private void ClearSearch() => SearchQuery = string.Empty;
 
     /// <summary>防抖后在线程池中匹配名称、扩展名和位置,避免大量文件搜索阻塞 UI</summary>
     private async Task ApplySearchAsync(string query)
@@ -696,6 +710,7 @@ public partial class FileExplorerViewModel(
             if (string.IsNullOrEmpty(normalizedQuery))
             {
                 _searchMatchedPaths = null;
+                OnPropertyChanged(nameof(SearchResultText));
                 BuildRows();
                 return;
             }
@@ -707,6 +722,7 @@ public partial class FileExplorerViewModel(
                 .ToHashSet(StringComparer.OrdinalIgnoreCase), cancellationTokenSource.Token);
             cancellationTokenSource.Token.ThrowIfCancellationRequested();
             _searchMatchedPaths = matches;
+            OnPropertyChanged(nameof(SearchResultText));
             BuildRows();
         }
         catch (OperationCanceledException)
@@ -714,25 +730,34 @@ public partial class FileExplorerViewModel(
         }
     }
 
-    /// <summary>执行忽略大小写的包含匹配和字符顺序模糊匹配</summary>
+    /// <summary>优先按文件名进行分词与字符顺序匹配, 扩展名和路径仅作为补充匹配</summary>
     private static bool IsSimilarMatch(FileItem file, string query)
     {
-        var searchableText = $"{file.Name} {file.Extension} {file.FullPath}";
-        if (searchableText.Contains(query, StringComparison.OrdinalIgnoreCase))
+        var normalizedTerms = query.Split([' ', '\t', '_', '-', '.'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (normalizedTerms.Length == 0)
+        {
+            return false;
+        }
+
+        if (normalizedTerms.All(term => file.Name.Contains(term, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
 
+        return IsSubsequence(file.Name, query)
+            || file.Extension.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || file.FullPath.Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>判断查询字符是否按顺序出现在文件名中, 支持快速缩写检索</summary>
+    private static bool IsSubsequence(string text, string query)
+    {
         var queryIndex = 0;
-        foreach (var character in searchableText)
+        foreach (var character in text)
         {
-            if (char.ToUpperInvariant(character) == char.ToUpperInvariant(query[queryIndex]))
+            if (char.ToUpperInvariant(character) == char.ToUpperInvariant(query[queryIndex]) && ++queryIndex == query.Length)
             {
-                queryIndex++;
-                if (queryIndex == query.Length)
-                {
-                    return true;
-                }
+                return true;
             }
         }
 

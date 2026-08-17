@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:FileGroupy.Views"
         xmlns:viewModels="clr-namespace:FileGroupy.ViewModels"
+        xmlns:hc="https://handyorg.github.io/handycontrol"
         Title="FileGroupy" Width="1320" Height="840" MinWidth="1024" MinHeight="680"
         WindowStartupLocation="CenterScreen" Background="{StaticResource PageBackgroundBrush}">
   <Window.Resources>
@@ -35,13 +36,13 @@
               <Border.RenderTransform><TranslateTransform x:Name="NavigationHoverTransform" X="0" Y="0" /></Border.RenderTransform>
             </Border>
             <StackPanel>
-              <Button x:Name="DashboardNavigationButton" Style="{StaticResource NavigationButton}" Command="{Binding ShowDashboardCommand}" MouseEnter="NavigationButton_OnMouseEnter">
+              <Button x:Name="DashboardNavigationButton" Tag="{Binding IsDashboardActive}" Style="{StaticResource NavigationButton}" Command="{Binding ShowDashboardCommand}" MouseEnter="NavigationButton_OnMouseEnter">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="16" Width="28" VerticalAlignment="Center" />
                   <TextBlock Text="概览与分类" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <Button x:Name="ExplorerNavigationButton" Style="{StaticResource NavigationButton}" Command="{Binding ShowExplorerCommand}" MouseEnter="NavigationButton_OnMouseEnter">
+              <Button x:Name="ExplorerNavigationButton" Tag="{Binding IsExplorerActive}" Style="{StaticResource NavigationButton}" Command="{Binding ShowExplorerCommand}" MouseEnter="NavigationButton_OnMouseEnter">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="16" Width="28" VerticalAlignment="Center" />
                   <TextBlock Text="全部文件" VerticalAlignment="Center" />
@@ -62,5 +63,8 @@
     <Border Grid.Column="1" Background="{StaticResource PageBackgroundBrush}" BorderBrush="#E5EAF1" BorderThickness="1,0,0,0">
       <ContentControl Content="{Binding CurrentViewModel}" />
     </Border>
+
+    <!-- 所有操作结果 Growl 限定在主窗口内容区, 避免使用桌面右上角全局提示. -->
+    <StackPanel Grid.Column="1" hc:Growl.Token="MainWindowGrowl" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,28,28,0" Panel.ZIndex="100" IsHitTestVisible="False" />
   </Grid>
 </Window>

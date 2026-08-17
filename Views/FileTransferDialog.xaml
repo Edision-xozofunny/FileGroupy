@@ -30,6 +30,7 @@
         <hc:Card Grid.Row="1" Style="{StaticResource AccentCard}" Margin="0,26,0,14">
             <StackPanel>
                 <TextBlock Text="目标位置" FontFamily="{StaticResource AppFontFamily}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,10" />
+                <Border Style="{StaticResource CardContentPanel}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -40,12 +41,17 @@
                     <Button Grid.Column="1" Command="{Binding ChooseDestinationCommand}" Content="本地文件夹" Background="#EAF2FF" Foreground="#175CD3" Margin="10,0,0,0" />
                     <Button Grid.Column="2" Command="{Binding ChooseMtpDestinationCommand}" Content="便携设备" Background="#F4EBFF" Foreground="#6941C6" Margin="8,0,0,0" />
                 </Grid>
-                <TextBlock Text="{Binding DestinationDescription}" Foreground="#667085" Margin="2,10,0,0" />
+                </Border>
+                <Border Style="{StaticResource CardContentPanel}" Margin="0,10,0,0" Padding="10,7">
+                    <TextBlock Text="{Binding DestinationDescription}" Foreground="{StaticResource TextSecondaryBrush}" />
+                </Border>
             </StackPanel>
         </hc:Card>
         <hc:Card Grid.Row="2" Style="{StaticResource AccentCard}" Margin="0,0,0,18">
             <StackPanel>
                 <TextBlock Text="目录与重名处理" FontFamily="{StaticResource AppFontFamily}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,10" />
+                <Border Style="{StaticResource CardContentPanel}">
+                <StackPanel>
                 <CheckBox Content="保持源路径目录结构" IsChecked="{Binding PreserveSourceStructure}" Margin="0,0,0,11" />
                 <Separator Margin="0,0,0,11" Background="#EAECF0" />
                 <TextBlock Text="遇到目标中已有同名文件时" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,0,0,8" />
@@ -55,6 +61,8 @@
                     <CheckBox Content="重复文件重命名" IsChecked="{Binding RenameDuplicates}" IsEnabled="{Binding CanRenameDuplicates}" />
                 </WrapPanel>
                 <TextBlock Text="重命名示例：报告.pdf → 报告 (1).pdf，仅在不保留原目录结构时可用" Foreground="#98A2B3" FontSize="12" Margin="0,10,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+                </Border>
             </StackPanel>
         </hc:Card>
         <Grid Grid.Row="3" Margin="0,2,0,12">
@@ -71,7 +79,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="13" VerticalAlignment="Center" />
-            <hc:Badge Value="{Binding Failures.Count}" Maximum="999999" Margin="10,0,0,0" Visibility="{Binding HasFailures, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <hc:Badge Style="{StaticResource CountBadge}" Value="{Binding Failures.Count}" Maximum="999999" Margin="10,0,0,0" Visibility="{Binding HasFailures, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Button Command="{Binding ShowFailuresCommand}" Content="查看失败详情" Foreground="#B42318" Padding="8,2" />
             </hc:Badge>
         </Grid>

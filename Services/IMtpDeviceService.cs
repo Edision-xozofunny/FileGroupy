@@ -73,6 +73,14 @@ public interface IMtpDeviceService
     /// <param name="deviceId">设备标识</param>
     void InvalidateScanCache(string deviceId);
 
+    /// <summary>批量验证设备中的栅格图像, 每个设备使用单一顺序会话以避免协议断连</summary>
+    /// <param name="files">待验证的设备图像文件</param>
+    /// <param name="cancellationToken">取消操作的标记</param>
+    /// <returns>可下载但无法由 WPF 读取的图像路径集合</returns>
+    Task<IReadOnlySet<string>> FindInvalidImagePathsAsync(
+        IReadOnlyCollection<FileItem> files,
+        CancellationToken cancellationToken = default);
+
     /// <summary>下载单个设备文件到临时目录, 供预览或 Shell 打开</summary>
     /// <param name="file">需要下载的设备文件</param>
     /// <param name="cancellationToken">取消操作的标记</param>

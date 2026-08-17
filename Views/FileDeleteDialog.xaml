@@ -29,7 +29,9 @@
         <hc:Card Grid.Row="1" Style="{StaticResource WarningCard}" Margin="0,20,0,16">
             <StackPanel>
                 <TextBlock Text="删除说明" FontFamily="{StaticResource AppFontFamily}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource WarningTextBrush}" Margin="0,0,0,10" />
-                <TextBlock Text="将尝试删除所选中的全部文件再次点击“开始删除”时，已被移动或删除的文件会记录为失败，可在“查看失败详情”中查看" TextWrapping="Wrap" Foreground="#475467" />
+                <Border Style="{StaticResource CardContentPanel}">
+                    <TextBlock Text="将尝试删除所选中的全部文件再次点击“开始删除”时，已被移动或删除的文件会记录为失败，可在“查看失败详情”中查看" TextWrapping="Wrap" Foreground="#475467" />
+                </Border>
             </StackPanel>
         </hc:Card>
         <Grid Grid.Row="2" Margin="0,2,0,12">
@@ -40,7 +42,7 @@
         <Grid Grid.Row="3" Margin="0,0,0,22">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="13" VerticalAlignment="Center" />
-            <hc:Badge Value="{Binding Failures.Count}" Maximum="999999" Margin="10,0,0,0" Visibility="{Binding HasFailures, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <hc:Badge Style="{StaticResource CountBadge}" Value="{Binding Failures.Count}" Maximum="999999" Margin="10,0,0,0" Visibility="{Binding HasFailures, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Button Command="{Binding ShowFailuresCommand}" Content="查看失败详情" Foreground="#B42318" Padding="8,2" />
             </hc:Badge>
         </Grid>
