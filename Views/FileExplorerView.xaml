@@ -68,9 +68,9 @@
             <Button Grid.Column="5" Command="{Binding ExpandToLevelCommand}" Content="展开" Style="{StaticResource SecondaryButton}" Padding="16,7" />
             <Button Grid.Column="6" Command="{Binding CollapseAllCommand}" Content="收缩" Style="{StaticResource NeutralButton}" Padding="16,7" Margin="8,0,0,0" />
             <Button Grid.Column="7" Command="{Binding RefreshCurrentCommand}" Content="刷新" Style="{StaticResource SecondaryButton}" Padding="16,7" Margin="8,0,0,0" />
-            <!-- Badge 显示待处理的无效图像数量, 校验在用户开启筛选时延迟执行. -->
-            <hc:Badge Grid.Column="8" Value="{Binding InvalidImageCount}" Maximum="999999" Margin="8,0,0,0" VerticalAlignment="Center">
-                <ToggleButton Command="{Binding ToggleInvalidImagesFilterCommand}" IsChecked="{Binding IsInvalidImagesFilterActive, Mode=OneWay}" Content="无效图像" Style="{StaticResource FilterToggleSwitch}" />
+            <!-- 首次点击在后台校验, 校验完成后显示包含 0 在内的精确数量. -->
+            <hc:Badge Grid.Column="8" Value="{Binding InvalidImageCount}" Maximum="999999" ShowBadge="{Binding HasInvalidImageValidation}" Margin="8,0,0,0" VerticalAlignment="Center">
+                <ToggleButton Command="{Binding ToggleInvalidImagesFilterCommand}" IsChecked="{Binding IsInvalidImagesFilterActive, Mode=OneWay}" Content="{Binding InvalidImageFilterText}" Style="{StaticResource FilterToggleSwitch}" />
             </hc:Badge>
         </Grid>
         <Grid Grid.Row="2">
@@ -95,7 +95,7 @@
                 <ItemsControl ItemsSource="{Binding StickyItems, ElementName=FilesGrid}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Grid Height="22">
+                            <Grid Height="{StaticResource ExplorerStickyRowHeight}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="44" />
                                     <ColumnDefinition Width="*" />

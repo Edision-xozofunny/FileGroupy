@@ -1,6 +1,12 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+  <!-- 浮动分组行尺寸集中管理, 视图只引用资源避免与按钮主题脱节. -->
+  <sys:Double x:Key="ExplorerStickyRowHeight">34</sys:Double>
+  <sys:Double x:Key="ExplorerStickyPanelMinHeight">40</sys:Double>
   <Style TargetType="DataGrid">
+    <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
+    <Setter Property="FontSize" Value="13" />
     <Setter Property="Background" Value="White" />
     <Setter Property="BorderBrush" Value="#D0D5DD" />
     <Setter Property="BorderThickness" Value="1" />
@@ -10,34 +16,34 @@
     <Setter Property="RowBackground" Value="White" />
     <Setter Property="AlternatingRowBackground" Value="#F8FAFC" />
     <Setter Property="AlternationCount" Value="2" />
-    <Setter Property="RowHeight" Value="40" />
-    <Setter Property="ColumnHeaderHeight" Value="40" />
+    <Setter Property="RowHeight" Value="42" />
+    <Setter Property="ColumnHeaderHeight" Value="42" />
     <Setter Property="SelectionUnit" Value="FullRow" />
     <Setter Property="SelectionMode" Value="Extended" />
     <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
     <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
   </Style>
   <Style TargetType="DataGridColumnHeader">
-    <Setter Property="Background" Value="#F1F5F9" />
+    <Setter Property="Background" Value="#F8FAFC" />
     <Setter Property="Foreground" Value="#475467" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Padding" Value="10,11" />
+    <Setter Property="Padding" Value="12,10" />
     <Setter Property="BorderBrush" Value="#DCE3EC" />
     <Setter Property="BorderThickness" Value="0,0,0,1" />
   </Style>
   <Style TargetType="DataGridCell">
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="Padding" Value="12,0" />
     <Setter Property="Foreground" Value="#344054" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Style.Triggers>
-      <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#DCEBFF" /><Setter Property="Foreground" Value="#1D4ED8" /></Trigger>
+      <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#EAF2FF" /><Setter Property="Foreground" Value="#175CD3" /></Trigger>
     </Style.Triggers>
   </Style>
   <Style TargetType="DataGridRow">
     <Style.Triggers>
-      <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#EEF4FF" /></Trigger>
-      <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#DCEBFF" /></Trigger>
+      <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#F4F8FF" /></Trigger>
+      <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#EAF2FF" /></Trigger>
       <DataTrigger Binding="{Binding File.IsInvalidImage}" Value="True"><Setter Property="Background" Value="#FFF1F0" /><Setter Property="Foreground" Value="#B42318" /></DataTrigger>
     </Style.Triggers>
   </Style>
@@ -83,8 +89,8 @@
     <Setter Property="Background" Value="#F8FAFC" />
     <Setter Property="BorderBrush" Value="#DCE3EC" />
     <Setter Property="BorderThickness" Value="1,0,1,0" />
-    <Setter Property="MinHeight" Value="26" />
-    <Setter Property="Padding" Value="0,2,0,2" />
+    <Setter Property="MinHeight" Value="{StaticResource ExplorerStickyPanelMinHeight}" />
+    <Setter Property="Padding" Value="0,3,0,3" />
     <Setter Property="SnapsToDevicePixels" Value="True" />
   </Style>
   <Style x:Key="ExplorerStickyItemButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -93,6 +99,7 @@
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Margin" Value="0,1,0,1" />
+    <Setter Property="MinHeight" Value="{StaticResource ExplorerStickyRowHeight}" />
     <Style.Triggers>
       <DataTrigger Binding="{Binding IsExtensionGroup}" Value="True">
         <Setter Property="Background" Value="#F8FAFC" />

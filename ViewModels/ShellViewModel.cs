@@ -12,6 +12,11 @@ public partial class ShellViewModel : ObservableObject
 
     [ObservableProperty] private ObservableObject _currentViewModel;
 
+    /// <summary>概览导航项是否为当前页面</summary>
+    public bool IsDashboardActive => CurrentViewModel == Dashboard;
+    /// <summary>文件浏览导航项是否为当前页面</summary>
+    public bool IsExplorerActive => CurrentViewModel == Explorer;
+
     public ShellViewModel(DashboardViewModel dashboard, FileExplorerViewModel explorer)
     {
         Dashboard = dashboard;
@@ -36,5 +41,11 @@ public partial class ShellViewModel : ObservableObject
     {
         Explorer.ShowAll();
         CurrentViewModel = Explorer;
+    }
+
+    partial void OnCurrentViewModelChanged(ObservableObject value)
+    {
+        OnPropertyChanged(nameof(IsDashboardActive));
+        OnPropertyChanged(nameof(IsExplorerActive));
     }
 }

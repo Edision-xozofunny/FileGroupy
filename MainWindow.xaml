@@ -6,29 +6,6 @@
         Title="FileGroupy" Width="1320" Height="840" MinWidth="1024" MinHeight="680"
         WindowStartupLocation="CenterScreen" Background="{StaticResource PageBackgroundBrush}">
   <Window.Resources>
-    <Style x:Key="NavigationButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Foreground" Value="#C9D4E5" />
-      <Setter Property="Padding" Value="12,11" />
-      <Setter Property="Margin" Value="0,3" />
-      <Setter Property="FontSize" Value="14" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Style.Triggers>
-        <Trigger Property="IsMouseOver" Value="True">
-          <Setter Property="Background" Value="#21314A" />
-          <Setter Property="Foreground" Value="White" />
-        </Trigger>
-        <Trigger Property="IsKeyboardFocusWithin" Value="True">
-          <Setter Property="Background" Value="#2B4770" />
-          <Setter Property="Foreground" Value="White" />
-        </Trigger>
-        <Trigger Property="IsPressed" Value="True">
-          <Setter Property="Background" Value="#31588A" />
-        </Trigger>
-      </Style.Triggers>
-    </Style>
     <DataTemplate DataType="{x:Type viewModels:DashboardViewModel}">
       <views:DashboardView />
     </DataTemplate>
@@ -53,18 +30,25 @@
           <Border Background="#172842" CornerRadius="6" Padding="10,7" Margin="4,0,4,8">
             <TextBlock Text="工作区" Foreground="#9AAAC0" FontSize="11" FontWeight="SemiBold" />
           </Border>
-          <Button Style="{StaticResource NavigationButton}" Command="{Binding ShowDashboardCommand}">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="16" Width="28" VerticalAlignment="Center" />
-              <TextBlock Text="概览与分类" VerticalAlignment="Center" />
+          <Grid x:Name="NavigationMenuPanel" MouseLeave="NavigationMenuPanel_OnMouseLeave" SizeChanged="NavigationMenuPanel_OnSizeChanged">
+            <Border x:Name="NavigationHoverSurface" Background="#284263" CornerRadius="6" Opacity="0" IsHitTestVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top">
+              <Border.RenderTransform><TranslateTransform x:Name="NavigationHoverTransform" X="0" Y="0" /></Border.RenderTransform>
+            </Border>
+            <StackPanel>
+              <Button x:Name="DashboardNavigationButton" Style="{StaticResource NavigationButton}" Command="{Binding ShowDashboardCommand}" MouseEnter="NavigationButton_OnMouseEnter">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="16" Width="28" VerticalAlignment="Center" />
+                  <TextBlock Text="概览与分类" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="ExplorerNavigationButton" Style="{StaticResource NavigationButton}" Command="{Binding ShowExplorerCommand}" MouseEnter="NavigationButton_OnMouseEnter">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="16" Width="28" VerticalAlignment="Center" />
+                  <TextBlock Text="全部文件" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
             </StackPanel>
-          </Button>
-          <Button Style="{StaticResource NavigationButton}" Command="{Binding ShowExplorerCommand}">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="16" Width="28" VerticalAlignment="Center" />
-              <TextBlock Text="全部文件" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
+          </Grid>
         </StackPanel>
         <Border DockPanel.Dock="Bottom" Background="#172842" BorderBrush="#263D5C" BorderThickness="1" CornerRadius="8" Padding="12" Margin="4,0,4,10">
           <StackPanel>

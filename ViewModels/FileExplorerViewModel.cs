@@ -71,6 +71,8 @@ public partial class FileExplorerViewModel(
     [ObservableProperty] private ExplorerRow? _selectedRow;
     /// <summary>文件详情侧栏是否打开, 仅由右键菜单显式触发</summary>
     [ObservableProperty] private bool _isDetailsDrawerOpen;
+    /// <summary>当前扫描结果是否已完成无效图像延迟校验</summary>
+    [ObservableProperty] private bool _hasInvalidImageValidation;
 
     /// <summary>是否存在可展示的文件操作状态</summary>
     public bool HasOperationStatus => !string.IsNullOrWhiteSpace(OperationStatus);
@@ -78,6 +80,8 @@ public partial class FileExplorerViewModel(
     public int InvalidImageCount => _files.Count(file => file.IsInvalidImage == true);
     /// <summary>是否正在仅显示无效图像</summary>
     public bool IsInvalidImagesFilterActive => _showInvalidImagesOnly;
+    /// <summary>无效图像按钮在校验前后的提示文本</summary>
+    public string InvalidImageFilterText => HasInvalidImageValidation ? "无效图像" : "无效图像 (点击检测)";
 
     /// <summary>文件集合发生增删改后触发</summary>
     public event EventHandler<FolderScanResult>? FilesChanged;
@@ -94,6 +98,7 @@ public partial class FileExplorerViewModel(
         SearchQuery = string.Empty;
         _categoryFilter = null;
         _showInvalidImagesOnly = false;
+        HasInvalidImageValidation = false;
         OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
         OperationStatus = string.Empty;
         _currentScanPath = result.Path;
@@ -122,6 +127,7 @@ public partial class FileExplorerViewModel(
         _expandedCategories.UnionWith(Enum.GetValues<FileCategory>());
         _categoryFilter = null;
         _showInvalidImagesOnly = false;
+        HasInvalidImageValidation = false;
         OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
         OperationStatus = string.Empty;
         _currentScanPath = string.Empty;
@@ -234,6 +240,7 @@ public partial class FileExplorerViewModel(
             }
 
             OnPropertyChanged(nameof(InvalidImageCount));
+            HasInvalidImageValidation = true;
             Subtitle = $"已验证 {imageFiles.Length:N0} 个本地图像, 发现 {InvalidImageCount:N0} 个无法解码文件";
             // 校验完成后一次性重建行集合, 避免每个坏图逐条触发 UI 更新.
             await RebuildRowsAsync(++_treeOperationVersion);
@@ -241,6 +248,7 @@ public partial class FileExplorerViewModel(
         catch (OperationCanceledException)
         {
             _showInvalidImagesOnly = false;
+            HasInvalidImageValidation = false;
             OnPropertyChanged(nameof(IsInvalidImagesFilterActive));
             Title = "全部文件";
             Subtitle = _files.Count == 0 ? "选择文件夹后，以文件类型为根节点浏览内容" : $"共 {_files.Count:N0} 个文件";
@@ -251,6 +259,8 @@ public partial class FileExplorerViewModel(
             IsTreeOperationInProgress = false;
         }
     }
+
+    partial void OnHasInvalidImageValidationChanged(bool value) => OnPropertyChanged(nameof(InvalidImageFilterText));
 
     /// <summary>展开或折叠分类及扩展名节点</summary>
     [RelayCommand]

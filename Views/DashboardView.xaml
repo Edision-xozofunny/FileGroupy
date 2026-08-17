@@ -16,9 +16,11 @@
       <TextBlock Text="文件概览" FontSize="30" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
       <TextBlock Text="扫描存储空间，整理每一种文件类型" Margin="0,7,0,28" Foreground="{StaticResource TextSecondaryBrush}" FontSize="14" />
 
-      <!-- 使用 Card 统一承载当前扫描来源和来源切换操作. -->
-      <hc:Card Header="扫描来源" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="26">
-        <Grid>
+      <!-- Header 属性在当前 HandyControl 主题中不渲染, 标题作为 Card 内容显式显示. -->
+      <hc:Card Style="{StaticResource AccentCard}" Padding="20">
+        <StackPanel>
+          <TextBlock Text="扫描来源" FontFamily="{StaticResource AppFontFamily}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,10" />
+          <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
           <StackPanel>
             <TextBlock Text="{Binding SelectedPath}" FontSize="16" Margin="0,5,0,0" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
@@ -32,7 +34,8 @@
           <Button Grid.Column="3" Command="{Binding ChooseFolderCommand}" Style="{StaticResource PrimaryButton}" Padding="18,11" Margin="10,0,0,0">
             <TextBlock Text="选择文件夹" FontWeight="SemiBold" />
           </Button>
-        </Grid>
+          </Grid>
+        </StackPanel>
       </hc:Card>
 
       <Border Visibility="{Binding IsScanning, Converter={StaticResource BooleanToVisibilityConverter}}" Background="{StaticResource AccentSoftBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,16,0,0">
