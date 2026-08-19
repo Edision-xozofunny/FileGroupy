@@ -45,7 +45,7 @@
     <Grid Grid.Row="1">
       <hc:Card Header="设备目录" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="6">
         <TreeView x:Name="FolderTree" ItemsSource="{Binding RootNodes}" SelectedItemChanged="FolderTree_OnSelectedItemChanged" TreeViewItem.Expanded="FolderTree_OnExpanded"
-                  BorderThickness="0" Background="Transparent" Padding="4" />
+            BorderThickness="0" Background="Transparent" Padding="4" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" />
       </hc:Card>
       <TextBlock Text="正在读取手机文件夹..." Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
                  Background="#CCFFFFFF" Foreground="#175CD3" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="18,10" />

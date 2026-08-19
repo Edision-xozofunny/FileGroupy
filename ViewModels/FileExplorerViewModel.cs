@@ -15,7 +15,10 @@ public partial class FileExplorerViewModel(
     IFileTransferService transferService,
     IMtpDeviceService mtpDeviceService,
     IFilePreviewService previewService,
-    IFileScannerService scanner) : ObservableObject
+    IFileScannerService scanner,
+    IDeletedFileRecoveryService recoveryService,
+    IPathHistoryStore pathHistoryStore,
+    IScanCacheStore scanCacheStore) : ObservableObject
 {
     /// <summary>最近一次扫描的全部文件</summary>
     private readonly List<FileItem> _files = [];
@@ -45,6 +48,14 @@ public partial class FileExplorerViewModel(
     private bool _showInvalidImagesOnly;
     /// <summary>用于取消无效图像延迟校验任务</summary>
     private CancellationTokenSource? _invalidImageValidationCancellationTokenSource;
+    /// <summary>当前本地扫描根目录的外部变更监听器</summary>
+    private FileSystemWatcher? _localFileWatcher;
+    /// <summary>用于合并短时间内连续文件变更通知的防抖取消源</summary>
+    private CancellationTokenSource? _fileChangeRefreshCancellationTokenSource;
+    /// <summary>监听器刚启用时忽略扫描期间积压的延迟事件</summary>
+    private DateTimeOffset _localWatcherStartedAt;
+    /// <summary>当前目录的外部变化是否已经提示, 防止同一批变化重复弹窗</summary>
+    private bool _hasNotifiedExternalChange;
 
     /// <summary>绑定到表格的根行和文件子行集合</summary>
     public BulkObservableCollection<ExplorerRow> Rows { get; } = [];
@@ -63,6 +74,12 @@ public partial class FileExplorerViewModel(
     [ObservableProperty] private int _selectedExpansionLevel = 2;
     /// <summary>树操作是否正在进行</summary>
     [ObservableProperty] private bool _isTreeOperationInProgress;
+    /// <summary>是否正在刷新当前 DataGrid 数据源</summary>
+    [ObservableProperty] private bool _isRefreshOverlayVisible;
+    /// <summary>与 Dashboard 同步的刷新阶段标题</summary>
+    [ObservableProperty] private string _refreshStageTitle = "正在准备";
+    /// <summary>与 Dashboard 同步的刷新进度文本</summary>
+    [ObservableProperty] private string _refreshProgressText = string.Empty;
     /// <summary>文件模糊检索关键字</summary>
     [ObservableProperty] private string _searchQuery = string.Empty;
     /// <summary>最近一次文件操作的状态文本</summary>
@@ -93,6 +110,8 @@ public partial class FileExplorerViewModel(
     public event EventHandler<FolderScanResult>? FilesChanged;
     /// <summary>请求重新扫描当前来源</summary>
     public event EventHandler? RefreshRequested;
+    /// <summary>当前加载目录检测到外部变化时请求主窗口显示提示</summary>
+    public event EventHandler<string>? ExternalChangeDetected;
 
     /// <summary>接收新扫描结果并显示全部分类</summary>
     public void Load(FolderScanResult result)
@@ -111,6 +130,9 @@ public partial class FileExplorerViewModel(
         _currentFolderCount = result.FolderCount;
         _currentSkippedItemCount = result.SkippedItemCount;
         _isLocalScan = result.Files.Count == 0 || result.Files.All(file => file.SourceKind == StorageSourceKind.LocalFileSystem);
+        _expandedCategories.Clear();
+        _expandedExtensions.Clear();
+        ConfigureLocalFileWatcher();
         OnPropertyChanged(nameof(InvalidImageCount));
         Title = "全部文件";
         Subtitle = result.SkippedItemCount == 0
@@ -140,6 +162,7 @@ public partial class FileExplorerViewModel(
         _currentFolderCount = 0;
         _currentSkippedItemCount = 0;
         _isLocalScan = false;
+        DisposeLocalFileWatcher();
         Rows.Clear();
         Title = "全部文件";
         Subtitle = "选择文件夹后，以文件类型为根节点浏览内容";
@@ -173,6 +196,26 @@ public partial class FileExplorerViewModel(
     /// <summary>请求刷新当前扫描来源</summary>
     [RelayCommand]
     private void RefreshCurrent() => RefreshRequested?.Invoke(this, EventArgs.Empty);
+
+    public void BeginRefreshOverlay(string stageTitle, string progressText)
+    {
+        RefreshStageTitle = stageTitle;
+        RefreshProgressText = progressText;
+        IsRefreshOverlayVisible = true;
+    }
+
+    public void UpdateRefreshOverlay(string stageTitle, string progressText)
+    {
+        if (!IsRefreshOverlayVisible)
+        {
+            return;
+        }
+
+        RefreshStageTitle = stageTitle;
+        RefreshProgressText = progressText;
+    }
+
+    public void EndRefreshOverlay() => IsRefreshOverlayVisible = false;
 
     /// <summary>关闭当前文件详情侧栏</summary>
     [RelayCommand]
@@ -538,7 +581,7 @@ public partial class FileExplorerViewModel(
     private async Task ShowTransferDialogAsync(bool moveFiles)
     {
         var selectedFiles = _files.Where(file => _selectedPaths.Contains(file.FullPath)).ToList();
-        var dialogViewModel = new FileTransferDialogViewModel(transferService, mtpDeviceService, selectedFiles, moveFiles);
+        var dialogViewModel = new FileTransferDialogViewModel(transferService, mtpDeviceService, pathHistoryStore, selectedFiles, moveFiles);
         var dialog = new FileTransferDialog(dialogViewModel)
         {
             Owner = System.Windows.Application.Current.MainWindow
@@ -547,6 +590,7 @@ public partial class FileExplorerViewModel(
         if (dialogViewModel.LastResult is { } result)
         {
             ApplyTransferResult(moveFiles, result);
+            InvalidateCurrentLocalScanCache();
             foreach (var sourceDeviceId in selectedFiles.Where(file => file.SourceKind == StorageSourceKind.MtpDevice)
                          .Select(file => file.SourceId)
                          .Where(deviceId => !string.IsNullOrWhiteSpace(deviceId))
@@ -562,6 +606,7 @@ public partial class FileExplorerViewModel(
             }
 
             ShowOperationResultMessage(moveFiles ? "移动" : "复制", result.Succeeded, result.Skipped, result.Failures.Count);
+            RequestBackgroundRefresh();
         }
 
         await Task.CompletedTask;
@@ -571,7 +616,7 @@ public partial class FileExplorerViewModel(
     private async Task ShowDeleteDialogAsync()
     {
         var selectedFiles = _files.Where(file => _selectedPaths.Contains(file.FullPath)).ToList();
-        var dialogViewModel = new FileDeleteDialogViewModel(transferService, selectedFiles);
+        var dialogViewModel = new FileDeleteDialogViewModel(transferService, recoveryService, selectedFiles);
         var dialog = new FileDeleteDialog(dialogViewModel)
         {
             Owner = System.Windows.Application.Current.MainWindow
@@ -580,6 +625,7 @@ public partial class FileExplorerViewModel(
         if (dialogViewModel.LastResult is { } result)
         {
             RemoveFilesBySourcePaths(result.SuccessfulSourcePaths);
+            InvalidateCurrentLocalScanCache();
             BuildRows();
             foreach (var deviceId in selectedFiles.Where(file => file.SourceKind == StorageSourceKind.MtpDevice)
                          .Select(file => file.SourceId)
@@ -592,6 +638,7 @@ public partial class FileExplorerViewModel(
 
             NotifyFilesChanged();
             ShowOperationResultMessage("删除", result.Succeeded, result.Skipped, result.Failures.Count);
+            RequestBackgroundRefresh();
         }
 
         await Task.CompletedTask;
@@ -682,6 +729,122 @@ public partial class FileExplorerViewModel(
         }
 
         FilesChanged?.Invoke(this, new FolderScanResult(_currentScanPath, _currentFolderCount, _files.ToList(), _currentSkippedItemCount));
+    }
+
+    private void InvalidateCurrentLocalScanCache()
+    {
+        if (_isLocalScan && !string.IsNullOrWhiteSpace(_currentScanPath))
+        {
+            var sourceId = Path.GetPathRoot(Path.GetFullPath(_currentScanPath)) ?? _currentScanPath;
+            scanCacheStore.InvalidateScan(StorageSourceKind.LocalFileSystem, sourceId, _currentScanPath);
+        }
+    }
+
+    private void ConfigureLocalFileWatcher()
+    {
+        DisposeLocalFileWatcher();
+        if (!_isLocalScan || string.IsNullOrWhiteSpace(_currentScanPath) || !Directory.Exists(_currentScanPath))
+        {
+            return;
+        }
+
+        _localFileWatcher = new FileSystemWatcher(_currentScanPath)
+        {
+            IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.FileName
+                | NotifyFilters.DirectoryName
+                | NotifyFilters.Size
+                | NotifyFilters.LastWrite,
+            Filter = "*",
+            EnableRaisingEvents = true
+        };
+        _localFileWatcher.Created += LocalFileWatcher_OnChanged;
+        _localFileWatcher.Deleted += LocalFileWatcher_OnChanged;
+        _localFileWatcher.Changed += LocalFileWatcher_OnChanged;
+        _localFileWatcher.Renamed += LocalFileWatcher_OnRenamed;
+        _localFileWatcher.Error += LocalFileWatcher_OnError;
+        _localWatcherStartedAt = DateTimeOffset.UtcNow;
+        _hasNotifiedExternalChange = false;
+    }
+
+    private void LocalFileWatcher_OnChanged(object sender, FileSystemEventArgs e) => ScheduleExternalChangeNotice();
+
+    private void LocalFileWatcher_OnRenamed(object sender, RenamedEventArgs e) => ScheduleExternalChangeNotice();
+
+    private void LocalFileWatcher_OnError(object sender, ErrorEventArgs e)
+    {
+        if (_localFileWatcher is not null)
+        {
+            _localFileWatcher.EnableRaisingEvents = false;
+        }
+        NotifyManualRefreshRequired("目录变化过于频繁，已暂停自动监听，请点击刷新更新结果");
+    }
+
+    private void ScheduleExternalChangeNotice()
+    {
+        if (DateTimeOffset.UtcNow - _localWatcherStartedAt < TimeSpan.FromSeconds(2))
+        {
+            return;
+        }
+
+        _fileChangeRefreshCancellationTokenSource?.Cancel();
+        _fileChangeRefreshCancellationTokenSource?.Dispose();
+        var cancellationTokenSource = new CancellationTokenSource();
+        _fileChangeRefreshCancellationTokenSource = cancellationTokenSource;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(2000, cancellationTokenSource.Token);
+                if (!cancellationTokenSource.IsCancellationRequested)
+                {
+                    NotifyManualRefreshRequired("检测到外部文件变化，请点击刷新更新缓存和显示结果");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        });
+    }
+
+    private void NotifyManualRefreshRequired(string message)
+    {
+        if (_hasNotifiedExternalChange)
+        {
+            return;
+        }
+
+        _hasNotifiedExternalChange = true;
+        _ = System.Windows.Application.Current.Dispatcher.InvokeAsync(() => ExternalChangeDetected?.Invoke(this, message));
+    }
+
+    private void DisposeLocalFileWatcher()
+    {
+        _fileChangeRefreshCancellationTokenSource?.Cancel();
+        _fileChangeRefreshCancellationTokenSource?.Dispose();
+        _fileChangeRefreshCancellationTokenSource = null;
+        _hasNotifiedExternalChange = false;
+        if (_localFileWatcher is null)
+        {
+            return;
+        }
+
+        _localFileWatcher.EnableRaisingEvents = false;
+        _localFileWatcher.Created -= LocalFileWatcher_OnChanged;
+        _localFileWatcher.Deleted -= LocalFileWatcher_OnChanged;
+        _localFileWatcher.Changed -= LocalFileWatcher_OnChanged;
+        _localFileWatcher.Renamed -= LocalFileWatcher_OnRenamed;
+        _localFileWatcher.Error -= LocalFileWatcher_OnError;
+        _localFileWatcher.Dispose();
+        _localFileWatcher = null;
+    }
+
+    private void RequestBackgroundRefresh()
+    {
+        if (_currentScanPath.Length > 0)
+        {
+            RefreshRequested?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     partial void OnSearchQueryChanged(string value)
@@ -789,14 +952,13 @@ public partial class FileExplorerViewModel(
         }
         catch (Exception exception)
         {
-            var owner = System.Windows.Application.Current.MainWindow;
-            System.Windows.MessageBox.Show(owner, $"无法预览“{row.File.Name}”：{exception.Message}", "文件预览", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            HandyControl.Controls.MessageBox.Warning($"无法预览“{row.File.Name}”：{exception.Message}", "文件预览");
         }
     }
 
     /// <summary>显示打开文件失败提示</summary>
     private static void ShowOpenError(FileItem file, Exception exception) =>
-        System.Windows.MessageBox.Show(System.Windows.Application.Current.MainWindow, $"无法打开“{file.Name}”：{exception.Message}", "打开文件", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+        HandyControl.Controls.MessageBox.Warning($"无法打开“{file.Name}”：{exception.Message}", "打开文件");
 
     /// <summary>根据当前可见行重新计算选择摘要</summary>
     public void RefreshSelectionSummary()
@@ -881,10 +1043,10 @@ public partial class FileExplorerViewModel(
     {
         var rows = new List<ExplorerRow>();
         var visibleFiles = GetVisibleFiles();
-        var categories = _categoryFilter is { } filter ? [filter] : Enum.GetValues<FileCategory>();
+        IEnumerable<FileCategory> categories = _categoryFilter is { } filter ? [filter] : FileCategoryCatalog.DisplayOrder;
         foreach (var category in categories)
         {
-            var group = visibleFiles.Where(file => file.Category == category).OrderBy(file => file.Name).ToList();
+            var group = visibleFiles.Where(file => file.Category == category).ToList();
             if (_categoryFilter is not null && group.Count == 0)
             {
                 continue;
@@ -902,6 +1064,7 @@ public partial class FileExplorerViewModel(
             });
             if (_expandedCategories.Contains(category))
             {
+                group.Sort((left, right) => StringComparer.CurrentCultureIgnoreCase.Compare(left.Name, right.Name));
                 foreach (var extensionGroup in group.GroupBy(file => string.IsNullOrWhiteSpace(file.Extension) ? "[无扩展名]" : file.Extension.ToUpperInvariant()).OrderBy(item => item.Key))
                 {
                     var extensionKey = GetExtensionKey(category, extensionGroup.Key);
@@ -1113,6 +1276,7 @@ public partial class FileExplorerViewModel(
         FileCategory.Office => "Office 与 PDF 文档",
         FileCategory.Archives => "压缩文件",
         FileCategory.SourceCode => "源代码",
+        FileCategory.Installers => "安装包",
         _ => "其他文件"
     };
 

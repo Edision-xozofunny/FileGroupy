@@ -8,6 +8,8 @@ public partial class MainWindow : Window
 {
     /// <summary>当前悬停的导航按钮, 供容器重新布局后重新对齐共享底纹</summary>
     private System.Windows.Controls.Button? _hoveredNavigationButton;
+    private bool _isClosing;
+    private readonly DashboardViewModel _dashboard;
 
     /// <summary>初始化主窗口并设置通过依赖注入创建的壳层视图模型</summary>
     /// <param name="viewModel">负责导航和页面状态的壳层视图模型</param>
@@ -15,6 +17,27 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        _dashboard = viewModel.Dashboard;
+        viewModel.Explorer.ExternalChangeDetected += Explorer_OnExternalChangeDetected;
+        Closing += MainWindow_OnClosing;
+    }
+
+    /// <summary>在主窗口内容区右上角提示当前目录存在外部变化</summary>
+    private static void Explorer_OnExternalChangeDetected(object? sender, string message) =>
+        HandyControl.Controls.Growl.Warning(message, "MainWindowGrowl");
+
+    /// <summary>扫描进行中时先取消并等待数据库事务结束, 再允许窗口退出</summary>
+    private async void MainWindow_OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_isClosing || !_dashboard.IsScanning)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        _isClosing = true;
+        await _dashboard.StopAsync();
+        Close();
     }
 
     /// <summary>将共享悬停底纹平滑移动到当前鼠标所在的导航项</summary>

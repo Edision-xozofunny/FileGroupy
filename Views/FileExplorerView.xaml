@@ -3,11 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:FileGroupy.Controls"
              xmlns:hc="https://handyorg.github.io/handycontrol">
-    <Grid Margin="48,42,48,48" Loaded="ExplorerRoot_OnLoaded" Unloaded="ExplorerRoot_OnUnloaded">
+    <Grid x:Name="ExplorerRoot" Margin="48,42,48,48" Loaded="ExplorerRoot_OnLoaded" Unloaded="ExplorerRoot_OnUnloaded" SizeChanged="ExplorerRoot_OnSizeChanged">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="54" />
         </Grid.RowDefinitions>
         <StackPanel>
             <TextBlock Text="{Binding Title}" FontSize="30" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
@@ -43,7 +44,7 @@
                 <ToggleButton Command="{Binding ToggleInvalidImagesFilterCommand}" IsChecked="{Binding IsInvalidImagesFilterActive, Mode=OneWay}" Content="{Binding InvalidImageFilterText}" Style="{StaticResource FilterToggleSwitch}" />
             </hc:Badge>
         </Grid>
-        <Grid Grid.Row="2">
+        <Grid x:Name="ExplorerDataArea" Grid.Row="2">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -95,7 +96,7 @@
                     hc:DataGridAttach.ShowRowNumber="True" hc:DataGridAttach.ShowSelectAllButton="True"
                     SelectionMode="Extended" EnableRowVirtualization="True" EnableColumnVirtualization="True"
                     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
-                    ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                    ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                     PreviewMouseLeftButtonDown="FilesGrid_OnPreviewMouseLeftButtonDown" PreviewMouseMove="FilesGrid_OnPreviewMouseMove" PreviewMouseLeftButtonUp="FilesGrid_OnPreviewMouseLeftButtonUp"
                     MouseMove="FilesGrid_OnMouseMove" MouseLeave="FilesGrid_OnMouseLeave"
                     MouseDoubleClick="FilesGrid_OnMouseDoubleClick" ContextMenuOpening="FilesGrid_OnContextMenuOpening">
@@ -167,6 +168,16 @@
                         <TextBlock Text="正在更新文件列表..." Margin="0,12,0,0" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
                     </StackPanel>
                 </Border>
+                <!-- 刷新遮罩与 Dashboard 共用同一阶段标题和动态进度文本. -->
+                <Border Background="#B8F6F8FC" Visibility="{Binding IsRefreshOverlayVisible, Converter={StaticResource BooleanToVisibilityConverter}}" Panel.ZIndex="25">
+                    <hc:Card Width="360" Padding="20" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <StackPanel>
+                            <TextBlock Text="{Binding RefreshStageTitle}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" />
+                            <ProgressBar Height="6" IsIndeterminate="True" Margin="0,14,0,12" Foreground="{StaticResource AccentBrush}" Background="{StaticResource AccentSoftBrush}" />
+                            <TextBlock Text="{Binding RefreshProgressText}" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" />
+                        </StackPanel>
+                    </hc:Card>
+                </Border>
                 <!-- 文件详情只从右键菜单打开, 点击表格其他位置时由代码隐藏层关闭. -->
                 <hc:Drawer x:Name="DetailsDrawer" IsOpen="{Binding IsDetailsDrawerOpen, Mode=TwoWay}" Dock="Right" ShowMask="False" Width="280" MinWidth="280" MaxWidth="280" Panel.ZIndex="30">
                     <hc:Card Header="文件详情" Width="280" Margin="0" Padding="18" Background="{StaticResource SurfaceBrush}">
@@ -207,5 +218,14 @@
                 </hc:Drawer>
             </Grid>
         </Grid>
+        <hc:Card x:Name="FloatingBackToTop" Grid.RowSpan="4" Panel.ZIndex="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" Padding="0"
+                 Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" Cursor="SizeAll"
+                 PreviewMouseLeftButtonDown="FloatingBackToTop_OnMouseLeftButtonDown" PreviewMouseMove="FloatingBackToTop_OnMouseMove" PreviewMouseLeftButtonUp="FloatingBackToTop_OnMouseLeftButtonUp"
+                 ToolTip="单击回到顶部，按住可拖动">
+            <hc:Card.RenderTransform><TranslateTransform x:Name="BackToTopTransform" /></hc:Card.RenderTransform>
+            <Button Width="34" Height="34" Padding="0" Style="{StaticResource PrimaryButton}" IsHitTestVisible="False">
+                <TextBlock Text="&#xE74A;" FontFamily="Segoe MDL2 Assets" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Button>
+        </hc:Card>
     </Grid>
 </UserControl>

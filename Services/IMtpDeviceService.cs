@@ -35,6 +35,13 @@ public interface IMtpDeviceService
         IProgress<FileScanProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>忽略缓存, 直接从 MTP/PTP 设备重新扫描指定目录</summary>
+    Task<FolderScanResult> RefreshAsync(
+        MtpDeviceInfo deviceInfo,
+        string rootPath,
+        IProgress<FileScanProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
     /// <summary>将设备文件复制或移动到本地目录</summary>
     /// <param name="sourceFiles">设备中的源文件集合</param>
     /// <param name="options">本地目标与冲突处理选项</param>

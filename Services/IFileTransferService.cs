@@ -24,6 +24,7 @@ public interface IFileTransferService
     /// <returns>成功, 跳过和失败项的聚合结果</returns>
     Task<FileTransferResult> DeleteAsync(
         IReadOnlyCollection<FileItem> sourceFiles,
+        bool permanentlyDeleteLocalFiles = false,
         IProgress<FileTransferProgress>? progress = null,
         CancellationToken cancellationToken = default);
 }

@@ -1,4 +1,3 @@
-using System.Windows.Forms;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -15,6 +14,8 @@ public partial class FileTransferDialogViewModel : ObservableObject
     private readonly IFileTransferService _transferService;
     /// <summary>用于选择手机目标设备的 MTP 服务</summary>
     private readonly IMtpDeviceService _mtpDeviceService;
+    /// <summary>保存复制和移动目录选择器的独立最近路径</summary>
+    private readonly IPathHistoryStore _pathHistoryStore;
     /// <summary>打开对话框时冻结的源文件集合</summary>
     private readonly IReadOnlyCollection<FileItem> _sourceFiles;
     /// <summary>当前传输任务的取消源</summary>
@@ -26,11 +27,13 @@ public partial class FileTransferDialogViewModel : ObservableObject
     public FileTransferDialogViewModel(
         IFileTransferService transferService,
         IMtpDeviceService mtpDeviceService,
+        IPathHistoryStore pathHistoryStore,
         IReadOnlyCollection<FileItem> sourceFiles,
         bool moveFiles)
     {
         _transferService = transferService;
         _mtpDeviceService = mtpDeviceService;
+        _pathHistoryStore = pathHistoryStore;
         _sourceFiles = sourceFiles;
         MoveFiles = moveFiles;
         Title = moveFiles ? "移动文件" : "复制文件";
@@ -78,10 +81,16 @@ public partial class FileTransferDialogViewModel : ObservableObject
     [RelayCommand]
     private void ChooseDestination()
     {
-        using var dialog = new FolderBrowserDialog { Description = "选择目标文件夹", UseDescriptionForTitle = true };
-        if (dialog.ShowDialog() == DialogResult.OK)
+        var historyKind = MoveFiles ? PathHistoryKind.MoveDestination : PathHistoryKind.CopyDestination;
+        var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            DestinationPath = dialog.SelectedPath;
+            Title = "选择目标文件夹",
+            InitialDirectory = _pathHistoryStore.GetLastPath(historyKind)
+        };
+        if (dialog.ShowDialog() == true)
+        {
+            DestinationPath = dialog.FolderName;
+            _pathHistoryStore.SaveLastPath(historyKind, dialog.FolderName);
             DestinationMtpDevice = null;
             DestinationDescription = "目标：本地文件夹";
         }

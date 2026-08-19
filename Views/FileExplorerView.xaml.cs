@@ -23,6 +23,10 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
     private FileExplorerViewModel? _viewModel;
     /// <summary>承载当前页面的主窗口, 用于监听抽屉外部点击</summary>
     private System.Windows.Window? _ownerWindow;
+    private System.Windows.Point? _backToTopDragOrigin;
+    private double _backToTopStartX;
+    private double _backToTopStartY;
+    private bool _hasDraggedBackToTop;
 
     /// <summary>初始化文件浏览页面及其 XAML 组件</summary>
     public FileExplorerView()
@@ -133,6 +137,74 @@ public partial class FileExplorerView : System.Windows.Controls.UserControl
         {
             viewModel.SetAllSelection(selected);
         }
+    }
+
+    private void FloatingBackToTop_OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _backToTopDragOrigin = e.GetPosition(ExplorerRoot);
+        _backToTopStartX = BackToTopTransform.X;
+        _backToTopStartY = BackToTopTransform.Y;
+        _hasDraggedBackToTop = false;
+        FloatingBackToTop.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void FloatingBackToTop_OnMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (_backToTopDragOrigin is not { } origin || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var current = e.GetPosition(ExplorerRoot);
+        var deltaX = current.X - origin.X;
+        var deltaY = current.Y - origin.Y;
+        if (!_hasDraggedBackToTop && Math.Abs(deltaX) < 5 && Math.Abs(deltaY) < 5)
+        {
+            return;
+        }
+
+        _hasDraggedBackToTop = true;
+        SetBackToTopPosition(_backToTopStartX + deltaX, _backToTopStartY + deltaY);
+        e.Handled = true;
+    }
+
+    private void FloatingBackToTop_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        FloatingBackToTop.ReleaseMouseCapture();
+        _backToTopDragOrigin = null;
+        if (!_hasDraggedBackToTop)
+        {
+            FilesGrid.ScrollToTop();
+        }
+
+        e.Handled = true;
+    }
+
+    private void ExplorerRoot_OnSizeChanged(object sender, SizeChangedEventArgs e) =>
+        SetBackToTopPosition(BackToTopTransform.X, BackToTopTransform.Y);
+
+    private void SetBackToTopPosition(double x, double y)
+    {
+        var dataAreaTop = ExplorerDataArea.TranslatePoint(new System.Windows.Point(), ExplorerRoot).Y;
+        var dataAreaBottom = dataAreaTop + ExplorerDataArea.ActualHeight;
+        var baseLeft = Math.Max(0, ExplorerRoot.ActualWidth - FloatingBackToTop.ActualWidth - 10);
+        var baseTop = Math.Max(0, ExplorerRoot.ActualHeight - FloatingBackToTop.ActualHeight - 10);
+        BackToTopTransform.X = Math.Clamp(x, -baseLeft, ExplorerRoot.ActualWidth - baseLeft - FloatingBackToTop.ActualWidth);
+
+        var desiredTop = Math.Clamp(baseTop + y, 0, ExplorerRoot.ActualHeight - FloatingBackToTop.ActualHeight);
+        var topRegionMaximum = Math.Max(0, dataAreaTop - FloatingBackToTop.ActualHeight - 4);
+        var bottomRegionMinimum = Math.Min(
+            ExplorerRoot.ActualHeight - FloatingBackToTop.ActualHeight,
+            dataAreaBottom + 4);
+        if (desiredTop > topRegionMaximum && desiredTop < bottomRegionMinimum)
+        {
+            desiredTop = desiredTop - topRegionMaximum <= bottomRegionMinimum - desiredTop
+                ? topRegionMaximum
+                : bottomRegionMinimum;
+        }
+
+        BackToTopTransform.Y = desiredTop - baseTop;
     }
 
     private void FilesGrid_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

@@ -51,7 +51,7 @@ public partial class MtpFolderPickerDialog : Window, INotifyPropertyChanged
         }
         catch (Exception exception)
         {
-            System.Windows.MessageBox.Show(this, $"无法访问设备存储目录：{exception.Message}\n\n请保持设备解锁，并确认 USB 用途为“文件传输”或“照片传输”", "选择设备文件夹", MessageBoxButton.OK, MessageBoxImage.Warning);
+            HandyControl.Controls.MessageBox.Warning($"无法访问设备存储目录：{exception.Message}\n\n请保持设备解锁，并确认 USB 用途为“文件传输”或“照片传输”", "选择设备文件夹");
             Close();
         }
         finally

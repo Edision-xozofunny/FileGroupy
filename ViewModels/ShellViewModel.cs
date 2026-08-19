@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -23,15 +24,41 @@ public partial class ShellViewModel : ObservableObject
         Explorer = explorer;
         _currentViewModel = Dashboard;
         Dashboard.ScanCompleted += (_, result) => Explorer.Load(result);
-        Dashboard.ScanCancelled += (_, _) => Explorer.Clear();
+        Dashboard.ScanCancelled += (_, _) =>
+        {
+            Explorer.EndRefreshOverlay();
+            Explorer.Clear();
+        };
+        Dashboard.PropertyChanged += Dashboard_OnPropertyChanged;
         Explorer.FilesChanged += (_, result) => Dashboard.ApplyExplorerSnapshot(result);
-        Explorer.RefreshRequested += async (_, _) => await Dashboard.RefreshCurrentCommand.ExecuteAsync(null);
+        Explorer.RefreshRequested += Explorer_OnRefreshRequested;
         Dashboard.CategoryRequested += (_, category) =>
         {
             Explorer.ShowCategory(category);
             CurrentViewModel = Explorer;
             SelectExplorerNavigation();
         };
+    }
+
+    private async void Explorer_OnRefreshRequested(object? sender, EventArgs e)
+    {
+        Explorer.BeginRefreshOverlay(Dashboard.ScanStageTitle, Dashboard.ScanProgressText);
+        try
+        {
+            await Dashboard.RefreshCurrentCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            Explorer.EndRefreshOverlay();
+        }
+    }
+
+    private void Dashboard_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DashboardViewModel.ScanStageTitle) or nameof(DashboardViewModel.ScanProgressText))
+        {
+            Explorer.UpdateRefreshOverlay(Dashboard.ScanStageTitle, Dashboard.ScanProgressText);
+        }
     }
 
     [RelayCommand]

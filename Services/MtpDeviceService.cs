@@ -1,19 +1,12 @@
 using System.IO;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using MediaDevices;
 using FileGroupy.Models;
 
 namespace FileGroupy.Services;
 
 /// <summary>通过 Windows WPD 协议访问 MTP 和 PTP 设备</summary>
-public sealed class MtpDeviceService : IMtpDeviceService
+public sealed class MtpDeviceService(IScanCacheStore cacheStore) : IMtpDeviceService
 {
-    /// <summary>保护进程内设备扫描缓存的锁</summary>
-    private static readonly object ScanCacheLock = new();
-    /// <summary>按设备和路径保存的扫描结果缓存</summary>
-    private static readonly Dictionary<string, CachedScan> ScanCache = new(StringComparer.Ordinal);
     /// <summary>扫描缓存的有效期</summary>
     private static readonly TimeSpan ScanCacheLifetime = TimeSpan.FromHours(1);
     /// <summary>设备扫描时跳过的低价值目录</summary>
@@ -101,6 +94,14 @@ public sealed class MtpDeviceService : IMtpDeviceService
         Task.Run(() => Scan(deviceInfo, rootPath, progress, cancellationToken), cancellationToken);
 
     /// <inheritdoc />
+    public Task<FolderScanResult> RefreshAsync(
+        MtpDeviceInfo deviceInfo,
+        string rootPath,
+        IProgress<FileScanProgress>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        Task.Run(() => Scan(deviceInfo, rootPath, progress, cancellationToken, true), cancellationToken);
+
+    /// <inheritdoc />
     public Task<FileTransferResult> TransferToLocalAsync(
         IReadOnlyCollection<FileItem> sourceFiles,
         FileTransferOptions options,
@@ -131,7 +132,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
             return;
         }
 
-        InvalidateCachedScans(deviceId);
+        cacheStore.InvalidateSource(deviceId);
     }
 
     /// <inheritdoc />
@@ -145,16 +146,24 @@ public sealed class MtpDeviceService : IMtpDeviceService
         Task.Run(() => DownloadPreviewFile(file, cancellationToken), cancellationToken);
 
     /// <summary>按设备顺序下载并快速验证图像, 防止多会话并发导致 MTP/PTP 设备断连</summary>
-    private static IReadOnlySet<string> FindInvalidImagePaths(IReadOnlyCollection<FileItem> files, CancellationToken cancellationToken)
+    private IReadOnlySet<string> FindInvalidImagePaths(IReadOnlyCollection<FileItem> files, CancellationToken cancellationToken)
     {
         var invalidPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var deviceGroups = files.Where(file => file.SourceKind == StorageSourceKind.MtpDevice
+        var imageFiles = files.Where(file => file.SourceKind == StorageSourceKind.MtpDevice
                                                && file.Category == FileCategory.Images
                                                && !ImageValidation.IsSvg(file.Extension)
                                        && !string.IsNullOrWhiteSpace(file.SourceId))
-                                .GroupBy(file => file.SourceId!, StringComparer.Ordinal);
+                              .ToArray();
+        var validationStates = new Dictionary<FileItem, bool>(cacheStore.GetImageValidationStates(imageFiles, ScanCacheLifetime));
+        foreach (var (file, isInvalid) in validationStates.Where(pair => pair.Value))
+        {
+            invalidPaths.Add(file.FullPath);
+        }
 
-        foreach (var deviceGroup in deviceGroups)
+        var uncachedFiles = imageFiles.Where(file => !validationStates.ContainsKey(file))
+                                       .GroupBy(file => file.SourceId!, StringComparer.Ordinal);
+
+        foreach (var deviceGroup in uncachedFiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var device = MediaDevice.GetDevices().FirstOrDefault(candidate => candidate.DeviceId == deviceGroup.Key);
@@ -179,6 +188,11 @@ public sealed class MtpDeviceService : IMtpDeviceService
                         if (!ImageValidation.CanReadRasterImage(stream))
                         {
                             invalidPaths.Add(file.FullPath);
+                            validationStates[file] = true;
+                        }
+                        else
+                        {
+                            validationStates[file] = false;
                         }
                     }
                     catch (OperationCanceledException)
@@ -197,13 +211,13 @@ public sealed class MtpDeviceService : IMtpDeviceService
             }
         }
 
+        cacheStore.StoreImageValidationStates(validationStates);
         return invalidPaths;
     }
 
-    private static FolderScanResult Scan(MtpDeviceInfo deviceInfo, string rootPath, IProgress<FileScanProgress>? progress, CancellationToken cancellationToken)
+    private FolderScanResult Scan(MtpDeviceInfo deviceInfo, string rootPath, IProgress<FileScanProgress>? progress, CancellationToken cancellationToken, bool forceRefresh = false)
     {
-        var cacheKey = GetScanCacheKey(deviceInfo.DeviceId, rootPath);
-        if (TryGetCachedScan(cacheKey, deviceInfo.DeviceId, out var cachedResult))
+        if (!forceRefresh && cacheStore.TryGetScan(StorageSourceKind.MtpDevice, deviceInfo.DeviceId, rootPath, ScanCacheLifetime) is { } cachedResult)
         {
             ReportCachedProgress(progress, cachedResult);
             return cachedResult;
@@ -304,7 +318,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
 
             ReportProgress(progress, folderCount, files.Count, totalBytes, categoryTotals);
             var result = new FolderScanResult($"{deviceInfo.DisplayName}（{GetProtocolName(deviceInfo.Protocol)}）/{rootPath}", folderCount, files, skippedItemCount);
-            StoreCachedScan(cacheKey, deviceInfo.DeviceId, result);
+            cacheStore.StoreScan(StorageSourceKind.MtpDevice, deviceInfo.DeviceId, rootPath, result, cancellationToken);
             return result;
         }
         finally
@@ -314,7 +328,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
     }
 
     /// <summary>在一个设备会话中顺序下载文件;MTP 设备通常无法从并行数据流中获得更高吞吐</summary>
-    private static FileTransferResult TransferToLocal(
+    private FileTransferResult TransferToLocal(
         IReadOnlyCollection<FileItem> sourceFiles,
         FileTransferOptions options,
         IProgress<FileTransferProgress>? progress,
@@ -405,7 +419,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
             var result = new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths, successfulTransfers);
             if (options.MoveFiles && succeeded > 0)
             {
-                InvalidateCachedScans(deviceId);
+                cacheStore.InvalidateSource(deviceId);
             }
 
             return result;
@@ -444,7 +458,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
     }
 
     /// <summary>在单一 MTP 会话中顺序上传本地文件;成功上传后才删除本地源文件以实现移动</summary>
-    private static FileTransferResult TransferFromLocal(
+    private FileTransferResult TransferFromLocal(
         IReadOnlyCollection<FileItem> sourceFiles,
         FileTransferOptions options,
         IProgress<FileTransferProgress>? progress,
@@ -528,7 +542,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
             var result = new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths, successfulTransfers);
             if (succeeded > 0)
             {
-                InvalidateCachedScans(deviceId);
+                cacheStore.InvalidateSource(deviceId);
             }
 
             return result;
@@ -539,7 +553,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         }
     }
 
-    private static FileTransferResult DeleteFiles(
+    private FileTransferResult DeleteFiles(
         IReadOnlyCollection<FileItem> sourceFiles,
         IProgress<FileTransferProgress>? progress,
         CancellationToken cancellationToken)
@@ -601,7 +615,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
 
             if (succeeded > 0)
             {
-                InvalidateCachedScans(deviceId);
+                cacheStore.InvalidateSource(deviceId);
             }
 
             return new FileTransferResult(succeeded, 0, failures, successfulSourcePaths, successfulTransfers);
@@ -656,119 +670,7 @@ public sealed class MtpDeviceService : IMtpDeviceService
         ReportProgress(progress, result.FolderCount, result.Files.Count, totalBytes, categories);
     }
 
-    private static string GetScanCacheKey(string deviceId, string rootPath) => $"{deviceId}\n{rootPath}";
-
-    private static bool TryGetCachedScan(string cacheKey, string deviceId, out FolderScanResult result)
-    {
-        lock (ScanCacheLock)
-        {
-            if (ScanCache.TryGetValue(cacheKey, out var cachedScan) && DateTimeOffset.UtcNow - cachedScan.CreatedAt <= ScanCacheLifetime)
-            {
-                result = cachedScan.Result;
-                return true;
-            }
-
-            ScanCache.Remove(cacheKey);
-        }
-
-        if (TryReadPersistentScan(deviceId, cacheKey, out var persistedCachedScan))
-        {
-            lock (ScanCacheLock)
-            {
-                ScanCache[cacheKey] = persistedCachedScan;
-            }
-
-            result = persistedCachedScan.Result;
-            return true;
-        }
-
-        result = null!;
-        return false;
-    }
-
-    private static void StoreCachedScan(string cacheKey, string deviceId, FolderScanResult result)
-    {
-        var cachedScan = new CachedScan(result, DateTimeOffset.UtcNow);
-        lock (ScanCacheLock)
-        {
-            ScanCache[cacheKey] = cachedScan;
-        }
-
-        WritePersistentScan(deviceId, cacheKey, cachedScan);
-    }
-
-    private static void InvalidateCachedScans(string deviceId)
-    {
-        lock (ScanCacheLock)
-        {
-            foreach (var cacheKey in ScanCache.Keys.Where(cacheKey => cacheKey.StartsWith($"{deviceId}\n", StringComparison.Ordinal)).ToArray())
-            {
-                ScanCache.Remove(cacheKey);
-            }
-        }
-
-        try
-        {
-            var deviceCacheDirectory = GetDeviceCacheDirectory(deviceId);
-            if (Directory.Exists(deviceCacheDirectory))
-            {
-                Directory.Delete(deviceCacheDirectory, true);
-            }
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
-
     private static bool ShouldScanDirectory(string directoryName) => !ExcludedDirectoryNames.Contains(directoryName);
-
-    private static bool TryReadPersistentScan(string deviceId, string cacheKey, out CachedScan cachedScan)
-    {
-        var cacheFilePath = GetCacheFilePath(deviceId, cacheKey);
-        try
-        {
-            if (File.Exists(cacheFilePath))
-            {
-                var savedScan = JsonSerializer.Deserialize<CachedScan>(File.ReadAllText(cacheFilePath));
-                if (savedScan is not null && DateTimeOffset.UtcNow - savedScan.CreatedAt <= ScanCacheLifetime)
-                {
-                    cachedScan = savedScan;
-                    return true;
-                }
-            }
-
-            File.Delete(cacheFilePath);
-        }
-        catch (IOException) { }
-        catch (JsonException) { }
-        catch (UnauthorizedAccessException) { }
-
-        cachedScan = null!;
-        return false;
-    }
-
-    private static void WritePersistentScan(string deviceId, string cacheKey, CachedScan cachedScan)
-    {
-        try
-        {
-            var cacheFilePath = GetCacheFilePath(deviceId, cacheKey);
-            Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
-            var temporaryPath = $"{cacheFilePath}.{Guid.NewGuid():N}.tmp";
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(cachedScan));
-            File.Move(temporaryPath, cacheFilePath, true);
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
-
-    private static string GetCacheFilePath(string deviceId, string cacheKey) =>
-        Path.Combine(GetDeviceCacheDirectory(deviceId), $"{GetHash(cacheKey)}.json");
-
-    private static string GetDeviceCacheDirectory(string deviceId) =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileGroupy", "MtpScanCache", GetHash(deviceId));
-
-    private static string GetHash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-
-    private sealed record CachedScan(FolderScanResult Result, DateTimeOffset CreatedAt);
 
     /// <summary>根据扩展名确定内置分类</summary>
     private static FileCategory GetCategory(string extension) => FileCategoryCatalog.GetCategory(extension);

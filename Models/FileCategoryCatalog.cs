@@ -2,6 +2,19 @@ namespace FileGroupy.Models;
 
 public static class FileCategoryCatalog
 {
+    /// <summary>Dashboard 卡片和文件树使用的稳定展示顺序</summary>
+    public static IReadOnlyList<FileCategory> DisplayOrder { get; } =
+    [
+        FileCategory.Images,
+        FileCategory.Audio,
+        FileCategory.Video,
+        FileCategory.Office,
+        FileCategory.Archives,
+        FileCategory.Installers,
+        FileCategory.SourceCode,
+        FileCategory.Other
+    ];
+
     public static IReadOnlyDictionary<string, FileCategory> ExtensionCategories { get; } = CreateExtensionCategories();
 
     public static FileCategory GetCategory(string extension) =>
@@ -21,6 +34,10 @@ public static class FileCategoryCatalog
 
     private static readonly IReadOnlyDictionary<string, string> TypeDescriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
+        [".exe"] = "Windows", [".msi"] = "Windows", [".msix"] = "Windows", [".msixbundle"] = "Windows", [".appx"] = "Windows", [".appxbundle"] = "Windows", [".msp"] = "Windows", [".msu"] = "Windows",
+        [".apk"] = "Android", [".aab"] = "Android", [".apks"] = "Android", [".xapk"] = "Android",
+        [".dmg"] = "macOS", [".pkg"] = "macOS", [".mpkg"] = "macOS", [".ipa"] = "iPhone / iPad", [".ipsw"] = "iPhone / iPad",
+        [".deb"] = "Linux", [".rpm"] = "Linux", [".appimage"] = "Linux", [".snap"] = "Linux", [".flatpak"] = "Linux", [".flatpakref"] = "Linux",
         [".cs"] = "C#", [".csx"] = "C# Script", [".vb"] = "Visual Basic", [".fs"] = "F#", [".fsx"] = "F# Script",
         [".java"] = "Java", [".kt"] = "Kotlin", [".kts"] = "Kotlin Script", [".scala"] = "Scala", [".groovy"] = "Groovy",
         [".js"] = "JavaScript", [".mjs"] = "JavaScript Module", [".cjs"] = "CommonJS", [".jsx"] = "React JSX", [".ts"] = "TypeScript", [".tsx"] = "React TSX", [".vue"] = "Vue",
@@ -48,7 +65,13 @@ public static class FileCategoryCatalog
                 ".doc", ".docx", ".docm", ".dot", ".dotx", ".xls", ".xlsx", ".xlsm", ".xlt", ".ppt", ".pptx", ".pptm", ".pps", ".ppsx", ".pdf", ".rtf", ".odt", ".ods", ".odp", ".epub", ".mobi", ".azw", ".azw3"
             ],
             [FileCategory.Archives] = [
-                ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".zst", ".cab", ".iso", ".img", ".wim", ".jar", ".war", ".apk"
+                ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".zst", ".cab", ".iso", ".img", ".wim", ".jar", ".war"
+            ],
+            [FileCategory.Installers] = [
+                ".exe", ".msi", ".msix", ".msixbundle", ".appx", ".appxbundle", ".msp", ".msu",
+                ".apk", ".aab", ".apks", ".xapk",
+                ".dmg", ".pkg", ".mpkg", ".ipa", ".ipsw",
+                ".deb", ".rpm", ".appimage", ".snap", ".flatpak", ".flatpakref"
             ],
             [FileCategory.SourceCode] = [
                 ".cs", ".csx", ".vb", ".fs", ".java", ".kt", ".kts", ".scala", ".groovy", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue", ".py", ".pyw", ".go", ".rs", ".c", ".h", ".cpp", ".cxx", ".cc", ".hpp", ".hh", ".m", ".mm", ".swift", ".php", ".rb", ".rake", ".pl", ".pm", ".r", ".lua", ".dart", ".ex", ".exs", ".erl", ".hrl", ".hs", ".fsx", ".clj", ".cljs", ".sql", ".sh", ".bash", ".zsh", ".ps1", ".psm1", ".bat", ".cmd", ".txt", ".log", ".csv", ".tsv", ".html", ".htm", ".css", ".scss", ".sass", ".less", ".xml", ".xaml", ".json", ".yaml", ".yml", ".toml", ".ini", ".config", ".md", ".dockerfile", ".makefile"

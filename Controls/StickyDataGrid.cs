@@ -47,6 +47,13 @@ public sealed class StickyDataGrid : DataGrid
         ScheduleStickyUpdate(System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
+    /// <summary>滚动到文件列表顶部</summary>
+    public void ScrollToTop()
+    {
+        var scrollViewer = FindVisualDescendant<ScrollViewer>(this);
+        scrollViewer?.ScrollToTop();
+    }
+
     /// <summary>数据或布局变化后更新固定分组行</summary>
     protected override void OnItemsChanged(System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
@@ -163,6 +170,27 @@ public sealed class StickyDataGrid : DataGrid
             foreach (var nestedRow in EnumerateVisualRows(child))
             {
                 yield return nestedRow;
+            }
+        }
+    }
+
+    private static T? FindVisualDescendant<T>(DependencyObject root) where T : DependencyObject =>
+        FindVisualDescendants<T>(root).FirstOrDefault();
+
+    private static IEnumerable<T> FindVisualDescendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var index = 0; index < count; index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var nested in FindVisualDescendants<T>(child))
+            {
+                yield return nested;
             }
         }
     }

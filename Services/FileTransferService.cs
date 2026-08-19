@@ -4,7 +4,9 @@ using FileGroupy.Models;
 
 namespace FileGroupy.Services;
 
-public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IFileTransferService
+public sealed class FileTransferService(
+    IMtpDeviceService mtpDeviceService,
+    IDeletedFileRecoveryService deletedFileRecoveryService) : IFileTransferService
 {
     private const int BufferSize = 1024 * 1024;
     private static readonly object DuplicateNameLock = new();
@@ -103,6 +105,7 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
     /// <inheritdoc />
     public async Task<FileTransferResult> DeleteAsync(
         IReadOnlyCollection<FileItem> sourceFiles,
+        bool permanentlyDeleteLocalFiles = false,
         IProgress<FileTransferProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -136,7 +139,9 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
 
         if (localFiles.Count > 0)
         {
-            var localResult = await DeleteLocalAsync(localFiles, cancellationToken);
+            var localResult = permanentlyDeleteLocalFiles
+                ? DeleteLocalPermanently(localFiles, cancellationToken)
+                : await deletedFileRecoveryService.SoftDeleteAsync(localFiles, null, cancellationToken);
             MergeResult(localResult, localFiles);
         }
 
@@ -149,32 +154,23 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
         return new FileTransferResult(succeeded, skipped, failures, successfulSourcePaths, successfulTransfers);
     }
 
-    private static Task<FileTransferResult> DeleteLocalAsync(IReadOnlyCollection<FileItem> sourceFiles, CancellationToken cancellationToken)
+    /// <summary>仅在用户显式确认后直接删除本地源文件, 不创建恢复快照</summary>
+    private static FileTransferResult DeleteLocalPermanently(IReadOnlyCollection<FileItem> sourceFiles, CancellationToken cancellationToken)
     {
-        var succeeded = 0;
         var failures = new List<FileTransferFailure>();
-        var successfulSourcePaths = new List<string>();
-        var successfulTransfers = new List<FileTransferSuccess>();
-
+        var successfulPaths = new List<string>();
         foreach (var file in sourceFiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                if (!File.Exists(file.FullPath))
-                {
-                    throw new FileNotFoundException("源文件已不存在", file.FullPath);
-                }
-
                 File.Delete(file.FullPath);
                 if (File.Exists(file.FullPath))
                 {
                     throw new IOException("文件删除后仍存在，可能被占用");
                 }
 
-                succeeded++;
-                successfulSourcePaths.Add(file.FullPath);
-                successfulTransfers.Add(new FileTransferSuccess(file.FullPath, string.Empty));
+                successfulPaths.Add(file.FullPath);
             }
             catch (OperationCanceledException)
             {
@@ -186,7 +182,7 @@ public sealed class FileTransferService(IMtpDeviceService mtpDeviceService) : IF
             }
         }
 
-        return Task.FromResult(new FileTransferResult(succeeded, 0, failures, successfulSourcePaths, successfulTransfers));
+        return new FileTransferResult(successfulPaths.Count, 0, failures, successfulPaths, []);
     }
 
     private static async Task<TransferOutcome> TransferOneAsync(

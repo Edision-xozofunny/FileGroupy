@@ -32,12 +32,22 @@ public sealed class FilePreviewService(IMtpDeviceService mtpDeviceService) : IFi
             }
 
             var previewPath = await GetReadablePathAsync(file, cancellationToken);
-            if (string.Equals(Path.GetExtension(previewPath), ".gif", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                return new FilePreviewResult(file, null, LoadAnimatedGif(previewPath), false);
-            }
+                if (string.Equals(Path.GetExtension(previewPath), ".gif", StringComparison.OrdinalIgnoreCase))
+                {
+                    var gifSource = TryLoadAnimatedGif(previewPath);
+                    return gifSource is null ? null : new FilePreviewResult(file, null, gifSource, false);
+                }
 
-            return new FilePreviewResult(file, null, await LoadImageAsync(previewPath, cancellationToken), false);
+                var imageSource = await TryLoadImageAsync(previewPath, cancellationToken);
+                return imageSource is null ? null : new FilePreviewResult(file, null, imageSource, false);
+            }
+            catch (Exception exception) when (IsUnsupportedImage(exception))
+            {
+                // WIC 无法解码损坏或未安装编解码器的格式时交给系统默认程序处理.
+                return null;
+            }
         }
 
         if (!TextExtensions.Contains(file.Extension))
@@ -145,27 +155,46 @@ public sealed class FilePreviewService(IMtpDeviceService mtpDeviceService) : IFi
     }
 
     /// <summary>在线程池解码静态图片并冻结结果, 便于安全绑定回 UI 线程</summary>
-    private static Task<ImageSource> LoadImageAsync(string path, CancellationToken cancellationToken) => Task.Run(() =>
+    private static Task<ImageSource?> TryLoadImageAsync(string path, CancellationToken cancellationToken) => Task.Run(() =>
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.DecodePixelWidth = 1600;
-        bitmap.UriSource = new Uri(path, UriKind.Absolute);
-        bitmap.EndInit();
-        bitmap.Freeze();
-        return (ImageSource)bitmap;
+        try
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.DecodePixelWidth = 1600;
+            bitmap.UriSource = new Uri(path, UriKind.Absolute);
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return (ImageSource)bitmap;
+        }
+        catch (Exception exception) when (IsUnsupportedImage(exception))
+        {
+            return null;
+        }
     }, cancellationToken);
 
     /// <summary>GIF 必须保持可变状态, Image 控件才能播放动画帧</summary>
-    private static ImageSource LoadAnimatedGif(string path)
+    private static ImageSource? TryLoadAnimatedGif(string path)
     {
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.UriSource = new Uri(path, UriKind.Absolute);
-        bitmap.EndInit();
-        return bitmap;
+        try
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.UriSource = new Uri(path, UriKind.Absolute);
+            bitmap.EndInit();
+            return bitmap;
+        }
+        catch (Exception exception) when (IsUnsupportedImage(exception))
+        {
+            return null;
+        }
     }
+
+    private static bool IsUnsupportedImage(Exception exception) =>
+        exception is NotSupportedException
+            or FileFormatException
+            or ArgumentException;
 }

@@ -15,6 +15,12 @@ public interface IFileScannerService
         IProgress<FileScanProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>忽略缓存, 直接从文件系统重新扫描指定目录</summary>
+    Task<FolderScanResult> RefreshAsync(
+        string folderPath,
+        IProgress<FileScanProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
     /// <summary>延迟验证本地图片是否可解码</summary>
     /// <param name="files">待验证的本地图像文件</param>
     /// <param name="cancellationToken">取消操作的标记</param>

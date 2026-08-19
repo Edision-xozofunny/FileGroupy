@@ -146,15 +146,14 @@
       </Setter.Value>
     </Setter>
   </Style>
-  <!-- 分类卡片数量使用更轻量的角标, 不抢占图标与标题的视觉重心. -->
+  <!-- 分类卡片角标保持在布局边界内, 避免小窗口下被 ScrollViewer 视口裁剪. -->
   <Style x:Key="CategoryCountBadge" TargetType="{x:Type hc:Badge}" BasedOn="{StaticResource CountBadge}">
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="{x:Type hc:Badge}">
           <Grid ClipToBounds="False">
             <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" ContentStringFormat="{TemplateBinding ContentStringFormat}" />
-            <Border x:Name="BadgeSurface" Panel.ZIndex="1" MinWidth="22" Height="18" Padding="5,1" Background="{StaticResource AccentBrush}" CornerRadius="9" HorizontalAlignment="Right" VerticalAlignment="Top">
-              <Border.RenderTransform><TranslateTransform X="6" Y="-6" /></Border.RenderTransform>
+            <Border x:Name="BadgeSurface" Panel.ZIndex="1" MinWidth="22" Height="18" Padding="5,1" Margin="0,6,6,0" Background="{StaticResource AccentBrush}" CornerRadius="9" HorizontalAlignment="Right" VerticalAlignment="Top">
               <TextBlock Text="{TemplateBinding Text}" Foreground="White" FontFamily="{StaticResource AppFontFamily}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
           </Grid>
@@ -320,12 +319,77 @@
       </Setter.Value>
     </Setter>
   </Style>
-  <Style TargetType="ScrollBar">
-    <Setter Property="Background" Value="#E2E8F0" />
+  <Style x:Key="AppScrollThumb" TargetType="Thumb">
+    <Setter Property="Background" Value="#52739C" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Border x:Name="ThumbSurface" Background="{TemplateBinding Background}" CornerRadius="4" />
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ThumbSurface" Property="Background" Value="#315B89" /></Trigger>
+            <Trigger Property="IsDragging" Value="True"><Setter TargetName="ThumbSurface" Property="Background" Value="{StaticResource AccentBrush}" /></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="AppScrollTrackButton" TargetType="RepeatButton">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RepeatButton">
+          <Border Background="{TemplateBinding Background}" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="AppScrollBar" TargetType="ScrollBar">
+    <Setter Property="Background" Value="#DCE6F2" />
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <Grid Background="{TemplateBinding Background}">
+                  <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True" Focusable="False" Margin="2,1"
+                      Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                      Value="{Binding Value, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                      ViewportSize="{TemplateBinding ViewportSize}">
+                    <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource AppScrollTrackButton}" Command="{x:Static ScrollBar.PageUpCommand}" /></Track.DecreaseRepeatButton>
+              <Track.Thumb><Thumb Style="{StaticResource AppScrollThumb}" MinHeight="24" /></Track.Thumb>
+                    <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource AppScrollTrackButton}" Command="{x:Static ScrollBar.PageDownCommand}" /></Track.IncreaseRepeatButton>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
     <Style.Triggers>
-      <Trigger Property="Orientation" Value="Vertical"><Setter Property="Width" Value="12" /></Trigger>
-      <Trigger Property="Orientation" Value="Horizontal"><Setter Property="Height" Value="12" /></Trigger>
+      <Trigger Property="Orientation" Value="Horizontal">
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+              <Grid Background="{TemplateBinding Background}">
+                   <Track x:Name="PART_Track" Orientation="Horizontal" Focusable="False" Margin="1,2"
+                       Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                       Value="{Binding Value, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                       ViewportSize="{TemplateBinding ViewportSize}">
+                     <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource AppScrollTrackButton}" Command="{x:Static ScrollBar.PageLeftCommand}" /></Track.DecreaseRepeatButton>
+                  <Track.Thumb><Thumb Style="{StaticResource AppScrollThumb}" MinWidth="24" /></Track.Thumb>
+                     <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource AppScrollTrackButton}" Command="{x:Static ScrollBar.PageRightCommand}" /></Track.IncreaseRepeatButton>
+                </Track>
+              </Grid>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Trigger>
     </Style.Triggers>
   </Style>
-  <Style TargetType="Thumb"><Setter Property="Background" Value="#94A3B8" /></Style>
+  <Style x:Key="AppScrollViewer" TargetType="ScrollViewer">
+    <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+    <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    <Setter Property="PanningMode" Value="Both" />
+  </Style>
 </ResourceDictionary>

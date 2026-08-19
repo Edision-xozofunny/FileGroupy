@@ -10,7 +10,7 @@
       <TextBlock Text="请选择“文件传输”(MTP) 或“照片传输”(PTP)；PTP 通常只提供相机媒体目录" Margin="0,7,0,18" Foreground="#667085" TextWrapping="Wrap" />
     </StackPanel>
     <hc:Card Grid.Row="1" Header="可用设备" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="6">
-      <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}" BorderThickness="0" Background="Transparent" Padding="4">
+      <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}" BorderThickness="0" Background="Transparent" Padding="4" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
       <ListBox.ItemTemplate>
         <DataTemplate>
           <Border Padding="10,8" Margin="0,2" CornerRadius="6">

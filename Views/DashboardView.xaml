@@ -18,8 +18,9 @@
       </Setter>
     </Style>
   </UserControl.Resources>
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
-    <StackPanel Margin="48,42,48,48">
+  <Grid Margin="48,42,48,48">
+    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+    <StackPanel>
       <TextBlock Text="文件概览" FontSize="30" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
       <TextBlock Text="扫描存储空间，整理每一种文件类型" Margin="0,7,0,28" Foreground="{StaticResource TextSecondaryBrush}" FontSize="14" />
 
@@ -29,17 +30,18 @@
           <TextBlock Text="扫描来源" FontFamily="{StaticResource AppFontFamily}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,10" />
           <Border Style="{StaticResource CardContentPanel}">
           <Grid>
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
           <StackPanel>
             <TextBlock Text="{Binding SelectedPath}" FontSize="16" Margin="0,5,0,0" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
             <TextBlock Text="{Binding FolderInfo}" Margin="0,8,0,0" Foreground="{StaticResource TextSecondaryBrush}" />
             <TextBlock Text="{Binding ErrorMessage}" Margin="0,8,0,0" Foreground="#D92D20" />
           </StackPanel>
-          <Button Grid.Column="1" Command="{Binding RefreshCurrentCommand}" Content="刷新" Style="{StaticResource NeutralButton}" Padding="18,11" Margin="18,0,0,0" />
-          <Button Grid.Column="2" Command="{Binding ChooseMtpDeviceCommand}" Style="{StaticResource SecondaryButton}" Padding="18,11" Margin="10,0,0,0">
+          <Button Grid.Column="1" Command="{Binding OpenDeletedFileRecoveryCommand}" Content="删除找回" Style="{StaticResource NeutralButton}" Padding="18,11" Margin="18,0,0,0" />
+          <Button Grid.Column="2" Command="{Binding RefreshCurrentCommand}" Content="刷新" Style="{StaticResource NeutralButton}" Padding="18,11" Margin="10,0,0,0" />
+          <Button Grid.Column="3" Command="{Binding ChooseMtpDeviceCommand}" Style="{StaticResource SecondaryButton}" Padding="18,11" Margin="10,0,0,0">
             <TextBlock Text="选择便携设备" FontWeight="SemiBold" />
           </Button>
-          <Button Grid.Column="3" Command="{Binding ChooseFolderCommand}" Style="{StaticResource PrimaryButton}" Padding="18,11" Margin="10,0,0,0">
+          <Button Grid.Column="4" Command="{Binding ChooseFolderCommand}" Style="{StaticResource PrimaryButton}" Padding="18,11" Margin="10,0,0,0">
             <TextBlock Text="选择文件夹" FontWeight="SemiBold" />
           </Button>
           </Grid>
@@ -47,11 +49,11 @@
         </StackPanel>
       </hc:Card>
 
-      <Border Visibility="{Binding IsScanning, Converter={StaticResource BooleanToVisibilityConverter}}" Background="{StaticResource AccentSoftBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,16,0,0">
+      <Border Visibility="{Binding IsScanProgressVisible, Converter={StaticResource BooleanToVisibilityConverter}}" Background="{StaticResource AccentSoftBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,16,0,0">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <StackPanel>
-            <TextBlock Text="正在扫描文件" FontWeight="SemiBold" Foreground="#175CD3" />
+            <TextBlock Text="{Binding ScanStageTitle}" FontWeight="SemiBold" Foreground="#175CD3" />
             <ProgressBar IsIndeterminate="True" Height="6" Margin="0,11,0,9" Foreground="{StaticResource AccentBrush}" Background="{StaticResource SurfaceMutedBrush}" />
             <TextBlock Text="{Binding ScanProgressText}" Foreground="#475467" />
           </StackPanel>
@@ -59,10 +61,12 @@
         </Grid>
       </Border>
 
-      <Grid Margin="0,32,0,12">
+    </StackPanel>
+    <Grid Grid.Row="1" Margin="0,32,0,12">
         <TextBlock Text="文件分类" FontSize="19" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
         <TextBlock Text="选择一个分类查看明细" HorizontalAlignment="Right" Foreground="{StaticResource TextSecondaryBrush}" />
       </Grid>
+    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,10,18,0">
       <ItemsControl ItemsSource="{Binding Categories}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
@@ -85,6 +89,6 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-    </StackPanel>
-  </ScrollViewer>
+    </ScrollViewer>
+  </Grid>
 </UserControl>

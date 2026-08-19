@@ -1,15 +1,19 @@
 using System.Collections.ObjectModel;
-using System.Windows.Forms;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileGroupy.Models;
 using FileGroupy.Services;
 using FileGroupy.Views;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FileGroupy.ViewModels;
 
 /// <summary>概览页视图模型, 负责选择来源, 扫描文件并生成分类卡片</summary>
-public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceService mtpDeviceService) : ObservableObject
+public partial class DashboardViewModel(
+    IFileScannerService scanner,
+    IMtpDeviceService mtpDeviceService,
+    IPathHistoryStore pathHistoryStore,
+    IServiceProvider serviceProvider) : ObservableObject
 {
     /// <summary>当前扫描使用的取消源, 空值表示没有正在执行的扫描</summary>
     private CancellationTokenSource? _scanCancellationTokenSource;
@@ -17,8 +21,14 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
     private Func<IProgress<FileScanProgress>, CancellationToken, Task<FolderScanResult>>? _lastScan;
     /// <summary>最近一次扫描的显示路径</summary>
     private string _lastScanPath = string.Empty;
+    /// <summary>最近一次扫描是否来自本地文件系统</summary>
+    private bool _lastScanWasLocal;
+    private MtpDeviceInfo? _lastMtpDevice;
+    private string _lastMtpRootPath = string.Empty;
     /// <summary>用于丢弃已取消扫描产生的旧进度</summary>
     private int _scanSessionId;
+    /// <summary>当前扫描完成信号, 用于应用关闭时等待缓存事务收尾</summary>
+    private TaskCompletionSource? _scanCompletionSource;
 
     /// <summary>扫描完成后显示在概览页的分类统计卡片集合</summary>
     public ObservableCollection<CategorySummary> Categories { get; } = [];
@@ -29,8 +39,12 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
     [ObservableProperty] private string _folderInfo = "选择一个本地或可移动磁盘中的文件夹以开始分析";
     /// <summary>是否正在扫描</summary>
     [ObservableProperty] private bool _isScanning;
+    /// <summary>取消后立即隐藏进度区域, 后台任务仍在快速收尾</summary>
+    [ObservableProperty] private bool _isScanProgressVisible;
     /// <summary>实时扫描进度文本</summary>
     [ObservableProperty] private string _scanProgressText = string.Empty;
+    /// <summary>当前缓存读取或源目录处理阶段标题</summary>
+    [ObservableProperty] private string _scanStageTitle = "正在准备";
     /// <summary>扫描失败提示</summary>
     [ObservableProperty] private string? _errorMessage;
 
@@ -44,24 +58,31 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
     [RelayCommand(CanExecute = nameof(CanChooseFolder))]
     private async Task ChooseFolderAsync()
     {
-        using var dialog = new FolderBrowserDialog
+        await CancelActiveScanAsync();
+        ClearScanState();
+        ScanCancelled?.Invoke(this, EventArgs.Empty);
+        var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Description = "选择要分析的文件夹",
-            UseDescriptionForTitle = true,
-            ShowNewFolderButton = false
+            Title = "选择要分析的文件夹",
+            InitialDirectory = pathHistoryStore.GetLastPath(PathHistoryKind.Scan)
         };
 
-        if (dialog.ShowDialog() != DialogResult.OK)
+        if (dialog.ShowDialog() != true)
         {
             return;
         }
 
-        await StartScanAsync(dialog.SelectedPath, (progress, cancellationToken) => scanner.ScanAsync(dialog.SelectedPath, progress, cancellationToken));
+        pathHistoryStore.SaveLastPath(PathHistoryKind.Scan, dialog.FolderName);
+        _lastScanWasLocal = true;
+        await StartScanAsync(dialog.FolderName, (progress, cancellationToken) => scanner.RefreshAsync(dialog.FolderName, progress, cancellationToken));
     }
 
     [RelayCommand(CanExecute = nameof(CanChooseFolder))]
     private async Task ChooseMtpDeviceAsync()
     {
+        await CancelActiveScanAsync();
+        ClearScanState();
+        ScanCancelled?.Invoke(this, EventArgs.Empty);
         IReadOnlyList<MtpDeviceInfo> devices;
         try
         {
@@ -91,6 +112,9 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
             };
             if (folderDialog.ShowDialog() == true && folderDialog.SelectedFolder is { } folder)
             {
+                _lastScanWasLocal = false;
+                _lastMtpDevice = device;
+                _lastMtpRootPath = folder.FullPath;
                 await StartScanAsync($"{device.DisplayName}（{GetProtocolName(device.Protocol)}）/{folder.Name}", (progress, cancellationToken) => mtpDeviceService.ScanAsync(device, folder.FullPath, progress, cancellationToken));
             }
         }
@@ -104,17 +128,23 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         _lastScanPath = displayPath;
         _lastScan = scan;
         IsScanning = true;
+        IsScanProgressVisible = true;
         ErrorMessage = null;
         SelectedPath = displayPath;
-        _scanCancellationTokenSource = new CancellationTokenSource();
+        FolderInfo = string.Empty;
+        var cancellationTokenSource = new CancellationTokenSource();
+        var completionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _scanCancellationTokenSource = cancellationTokenSource;
+        _scanCompletionSource = completionSource;
         var scanSessionId = ++_scanSessionId;
         InitializeCategories();
-        ScanProgressText = "正在准备扫描...";
+        ScanStageTitle = "正在读取缓存";
+        ScanProgressText = "正在读取缓存...";
 
         try
         {
             var progress = new Progress<FileScanProgress>(value => UpdateScanProgress(scanSessionId, value));
-            var result = await scan(progress, _scanCancellationTokenSource.Token);
+            var result = await scan(progress, cancellationTokenSource.Token);
             Populate(result);
             ScanCompleted?.Invoke(this, result);
         }
@@ -127,9 +157,27 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         }
         finally
         {
-            IsScanning = false;
-            _scanCancellationTokenSource.Dispose();
-            _scanCancellationTokenSource = null;
+            if (ReferenceEquals(_scanCancellationTokenSource, cancellationTokenSource))
+            {
+                IsScanning = false;
+                IsScanProgressVisible = false;
+                _scanCancellationTokenSource = null;
+                _scanCompletionSource = null;
+            }
+            cancellationTokenSource.Dispose();
+            completionSource.TrySetResult();
+        }
+    }
+
+    /// <summary>关闭应用前取消扫描并等待当前扫描及缓存写入事务完成</summary>
+    public async Task StopAsync()
+    {
+        _scanSessionId++;
+        _scanCancellationTokenSource?.Cancel();
+        var completion = _scanCompletionSource?.Task;
+        if (completion is not null)
+        {
+            await completion;
         }
     }
 
@@ -139,8 +187,23 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
     {
         _scanSessionId++;
         _scanCancellationTokenSource?.Cancel();
+        IsScanning = false;
+        IsScanProgressVisible = false;
         ClearScanState();
         ScanCancelled?.Invoke(this, EventArgs.Empty);
+    }
+
+    private async Task CancelActiveScanAsync()
+    {
+        var completion = _scanCompletionSource?.Task;
+        if (completion is null)
+        {
+            return;
+        }
+
+        _scanSessionId++;
+        _scanCancellationTokenSource?.Cancel();
+        await completion;
     }
 
     /// <summary>使用最近一次扫描来源重新读取当前数据</summary>
@@ -149,7 +212,21 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
     {
         if (_lastScan is not null)
         {
-            await StartScanAsync(_lastScanPath, _lastScan);
+            if (_lastScanWasLocal)
+            {
+                await StartScanAsync(_lastScanPath, (progress, cancellationToken) => scanner.RefreshAsync(_lastScanPath, progress, cancellationToken));
+            }
+            else
+            {
+                if (_lastMtpDevice is not null && !string.IsNullOrWhiteSpace(_lastMtpRootPath))
+                {
+                    await StartScanAsync(_lastScanPath, (progress, cancellationToken) => mtpDeviceService.RefreshAsync(_lastMtpDevice, _lastMtpRootPath, progress, cancellationToken));
+                }
+                else
+                {
+                    await StartScanAsync(_lastScanPath, _lastScan);
+                }
+            }
         }
     }
 
@@ -167,6 +244,25 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
     [RelayCommand]
     private void OpenCategory(FileCategory category) => CategoryRequested?.Invoke(this, category);
 
+    /// <summary>打开本地删除文件的快照管理与恢复窗口</summary>
+    [RelayCommand]
+    private void OpenDeletedFileRecovery()
+    {
+        var viewModel = serviceProvider.GetRequiredService<DeletedFileRecoveryViewModel>();
+        var dialog = new DeletedFileRecoveryDialog(viewModel)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        viewModel.RecoveryCompleted += RecoveryViewModel_OnRecoveryCompleted;
+        dialog.ShowDialog();
+        viewModel.RecoveryCompleted -= RecoveryViewModel_OnRecoveryCompleted;
+    }
+
+    private async void RecoveryViewModel_OnRecoveryCompleted(object? sender, EventArgs e)
+    {
+        await RefreshCurrentCommand.ExecuteAsync(null);
+    }
+
     public void ApplyExplorerSnapshot(FolderScanResult result)
     {
         SelectedPath = result.Path;
@@ -177,13 +273,23 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
     private void Populate(FolderScanResult result)
     {
         InitializeCategories();
-        foreach (var category in Enum.GetValues<FileCategory>())
+        var summaries = Enum.GetValues<FileCategory>()
+            .ToDictionary(category => category, _ => new CategoryScanSummary(0, 0));
+        var totalSize = 0L;
+        foreach (var file in result.Files)
         {
-            var items = result.Files.Where(file => file.Category == category).ToList();
-            ReplaceCategory(category, items.Count, items.Sum(file => file.Size));
+            totalSize += file.Size;
+            var summary = summaries[file.Category];
+            summaries[file.Category] = new CategoryScanSummary(summary.FileCount + 1, summary.TotalSize + file.Size);
         }
 
-        FolderInfo = $"{result.FolderCount:N0} 个文件夹  |  {result.Files.Count:N0} 个文件  |  {SizeFormatter.Format(result.Files.Sum(file => file.Size))}";
+        foreach (var category in Enum.GetValues<FileCategory>())
+        {
+            var summary = summaries[category];
+            ReplaceCategory(category, summary.FileCount, summary.TotalSize);
+        }
+
+        FolderInfo = $"{result.FolderCount:N0} 个文件夹  |  {result.Files.Count:N0} 个文件  |  {SizeFormatter.Format(totalSize)}";
         ScanProgressText = result.SkippedItemCount == 0
             ? "扫描完成"
             : $"扫描部分完成：已跳过 {result.SkippedItemCount:N0} 个无法读取的目录或文件";
@@ -197,22 +303,45 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
             return;
         }
 
-        foreach (var category in Enum.GetValues<FileCategory>())
+        if (progress.Phase is FileScanPhase.ReadingCache or FileScanPhase.Scanning)
         {
-            var summary = progress.CategorySummaries[category];
-            ReplaceCategory(category, summary.FileCount, summary.TotalSize);
+            foreach (var category in Enum.GetValues<FileCategory>())
+            {
+                var summary = progress.CategorySummaries[category];
+                ReplaceCategory(category, summary.FileCount, summary.TotalSize);
+            }
         }
 
-        ScanProgressText = $"已扫描 {progress.FoldersScanned:N0} 个文件夹，发现 {progress.FilesDiscovered:N0} 个文件，{SizeFormatter.Format(progress.BytesDiscovered)}";
+        (ScanStageTitle, ScanProgressText) = progress.Phase switch
+        {
+            FileScanPhase.ReadingCache => (
+                "正在读取缓存",
+                $"已读取 {progress.FilesDiscovered:N0} 个文件元数据，{SizeFormatter.Format(progress.BytesDiscovered)}"),
+            FileScanPhase.ValidatingCache => (
+                "正在校验缓存",
+                $"已检查 {progress.FoldersScanned:N0} 个文件夹，{progress.FilesDiscovered:N0} 个文件"),
+            FileScanPhase.RefreshingSource => (
+                "正在校验源目录",
+                $"已检查 {progress.FoldersScanned:N0} 个文件夹，{progress.FilesDiscovered:N0} 个文件"),
+            _ => (
+                "正在扫描源目录",
+                $"已扫描 {progress.FoldersScanned:N0} 个文件夹，发现 {progress.FilesDiscovered:N0} 个文件，{SizeFormatter.Format(progress.BytesDiscovered)}")
+        };
     }
 
     /// <summary>清空已取消扫描产生的概览数据</summary>
     private void ClearScanState()
     {
+        _lastScan = null;
+        _lastScanPath = string.Empty;
+        _lastScanWasLocal = false;
+        _lastMtpDevice = null;
+        _lastMtpRootPath = string.Empty;
         Categories.Clear();
         SelectedPath = "尚未选择文件夹";
         FolderInfo = "选择一个本地或可移动磁盘中的文件夹以开始分析";
         ScanProgressText = "扫描已取消，结果已清空";
+        ScanStageTitle = "正在准备";
         ErrorMessage = null;
     }
 
@@ -220,7 +349,7 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
     private void InitializeCategories()
     {
         Categories.Clear();
-        foreach (var category in Enum.GetValues<FileCategory>())
+        foreach (var category in FileCategoryCatalog.DisplayOrder)
         {
             Categories.Add(CreateCategorySummary(category, 0, 0));
         }
@@ -259,6 +388,7 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         FileCategory.Office => "Office 与 PDF 文档",
         FileCategory.Archives => "压缩文件",
         FileCategory.SourceCode => "源代码",
+        FileCategory.Installers => "安装包",
         _ => "其他文件"
     };
 
@@ -270,6 +400,7 @@ public partial class DashboardViewModel(IFileScannerService scanner, IMtpDeviceS
         FileCategory.Office => "\uE8A5",
         FileCategory.Archives => "\uE8B7",
         FileCategory.SourceCode => "\uE943",
+        FileCategory.Installers => "\uE896",
         _ => "\uE8A4"
     };
 
